@@ -102,15 +102,24 @@ build_and_push_image() {
     # Build and push using the build script
     # Capture the output to extract the image tag
     BUILD_OUTPUT=$(PUSH_TO_HUB=1 DOCKER_USERNAME="${DOCKER_USERNAME}" IMAGE_TAG="${IMAGE_TAG:-}" ./scripts/build_docker.sh 2>&1)
+    BUILD_EXIT_CODE=$?
     
     # Display the build output
     echo "$BUILD_OUTPUT"
+    
+    # Check if build succeeded
+    if [ $BUILD_EXIT_CODE -ne 0 ]; then
+        echo ""
+        echo "ERROR: Docker build failed with exit code $BUILD_EXIT_CODE"
+        exit 1
+    fi
     
     # Extract the image tag from build output (build_docker.sh outputs LAKEFRONT_IMAGE_TAG=xxx)
     DEPLOYED_IMAGE_TAG=$(echo "$BUILD_OUTPUT" | grep "^LAKEFRONT_IMAGE_TAG=" | cut -d'=' -f2)
     
     if [ -z "$DEPLOYED_IMAGE_TAG" ]; then
         echo "ERROR: Failed to determine image tag from build output"
+        echo "Build may have succeeded but didn't output LAKEFRONT_IMAGE_TAG"
         exit 1
     fi
     
@@ -260,6 +269,13 @@ create_secrets() {
 
 deploy_ray_cluster() {
     print_header "Deploying Ray Cluster"
+    
+    # Verify IMAGE_TAG is set (should be set by build_and_push_image)
+    if [ -z "${IMAGE_TAG:-}" ]; then
+        echo "ERROR: IMAGE_TAG not set. Build may have failed."
+        echo "IMAGE_TAG must be set before deploying."
+        exit 1
+    fi
     
     # Use the IMAGE_TAG set by build_and_push_image
     DEPLOY_IMAGE="${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
