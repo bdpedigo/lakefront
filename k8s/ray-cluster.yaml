@@ -25,8 +25,8 @@ spec:
           - name: ray-head
             # Use the Docker image we just built
             # TODO: Update this to your Docker Hub username (e.g., YOUR-USERNAME/lakefront-ray:latest)
-            image: lakefront-ray:latest
-            imagePullPolicy: IfNotPresent
+            image: bdpedigo/lakefront-ray:v1
+            imagePullPolicy: Always
             
             # Resource requests and limits for head node
             resources:
@@ -74,7 +74,7 @@ spec:
   # Worker node configuration
   workerGroupSpecs:
     - groupName: worker-group
-      replicas: 2  # Number of worker nodes
+      replicas: 1  # Number of worker nodes
       minReplicas: 0  # Can scale down to 0 if autoscaling is enabled
       maxReplicas: 10  # Maximum workers if autoscaling is enabled
       
@@ -88,19 +88,20 @@ spec:
           containers:
             - name: ray-worker
               # Same image as head node (update to match head node image)
-              image: lakefront-ray:latest
-              imagePullPolicy: IfNotPresent
+              image: bdpedigo/lakefront-ray:v1
+              imagePullPolicy: Always
               
               # Resource requests and limits for workers
               # These should be tuned based on your workload
+              # Reduced to fit on e2-standard-4 node (4 vCPU, 16GB RAM)
               resources:
                 requests:
-                  memory: "8Gi"
-                  cpu: "4"
-                  ephemeral-storage: "8Gi"
+                  memory: "2Gi"
+                  cpu: "1"
+                  ephemeral-storage: "4Gi"
                 limits:
-                  memory: "32Gi"
-                  ephemeral-storage: "32Gi"
+                  memory: "8Gi"
+                  ephemeral-storage: "16Gi"
               
               # Environment variables (same as head node)
               env:

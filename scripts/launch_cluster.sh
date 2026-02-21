@@ -27,8 +27,8 @@ DOCKER_USERNAME="${DOCKER_USERNAME:-bdpedigo}"  # Set via environment or command
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 # Network Configuration (optional - remove these flags if using default network)
-# NETWORK="projects/${PROJECT_ID}/global/networks/patchseq"
-# SUBNETWORK="projects/${PROJECT_ID}/regions/${REGION}/subnetworks/patchseq"
+NETWORK="projects/${PROJECT_ID}/global/networks/patchseq"
+SUBNETWORK="projects/${PROJECT_ID}/regions/${REGION}/subnetworks/patchseq"
 
 # Secrets Configuration
 SECRETS_DIR="${SECRETS_DIR:-$HOME/.cloudvolume/secrets}"
@@ -265,9 +265,16 @@ create_secrets() {
 deploy_ray_cluster() {
     print_header "Deploying Ray Cluster"
     
-    # Apply Ray cluster configuration
+    # Determine image tag (use env var or git commit SHA)
+    DEPLOY_IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD 2>/dev/null || echo 'latest')}"
+    DEPLOY_IMAGE="${DOCKER_USERNAME}/lakefront-ray:${DEPLOY_IMAGE_TAG}"
+    
+    echo "Using image: ${DEPLOY_IMAGE}"
+    echo ""
+    
+    # Apply Ray cluster configuration with image substitution
     echo "Applying Ray cluster configuration..."
-    kubectl apply -f k8s/ray-cluster.yaml
+    sed "s|image: bdpedigo/lakefront-ray:.*|image: ${DEPLOY_IMAGE}|g" k8s/ray-cluster.yaml | kubectl apply -f -
     
     # Apply Ray service
     echo "Applying Ray service..."

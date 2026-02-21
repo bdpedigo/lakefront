@@ -81,6 +81,10 @@ def main():
         future = compute_sum_of_squares.remote(start, end)
         futures.append(future)
 
+    print(
+        f"Submitted {num_tasks} tasks to compute sum of squares from 0 to {num_tasks * chunk_size}"
+    )
+
     # Gather results
     results = ray.get(futures)
     total = sum(results)
