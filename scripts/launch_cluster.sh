@@ -126,7 +126,7 @@ build_and_push_image() {
     
     # Export for use in deploy_ray_cluster
     export IMAGE_TAG="$DEPLOYED_IMAGE_TAG"
-    
+    exit 0
     echo ""
     echo "✓ Image built and pushed: ${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
 }
