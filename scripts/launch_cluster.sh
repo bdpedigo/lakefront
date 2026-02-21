@@ -24,7 +24,7 @@ DISK_TYPE="${DISK_TYPE:-pd-standard}"
 
 # Docker Image Configuration
 DOCKER_USERNAME="${DOCKER_USERNAME:-bdpedigo}"  # Set via environment or command line
-IMAGE_TAG="${IMAGE_TAG:-latest}"
+IMAGE_TAG=$(git rev-parse --short HEAD)
 
 # Network Configuration (optional - remove these flags if using default network)
 NETWORK="projects/${PROJECT_ID}/global/networks/patchseq"
@@ -372,6 +372,8 @@ main() {
     echo "Zone: ${ZONE}"
     echo "Machine Type: ${MACHINE_TYPE}"
     echo "Nodes: ${NUM_NODES}"
+    echo "Docker Image: ${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
+    echo ""
     
     check_prerequisites
     
@@ -382,7 +384,7 @@ main() {
         exit 0
     fi
     
-    build_and_push_image
+    # build_and_push_image
     create_gke_cluster
     install_kuberay_operator
     create_secrets

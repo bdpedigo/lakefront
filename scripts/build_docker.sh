@@ -37,12 +37,7 @@ check_git_status() {
 
 # Get git commit SHA for tagging
 get_image_tag() {
-    if [ -n "${IMAGE_TAG:-}" ]; then
-        echo "$IMAGE_TAG"
-    else
-        # Use short commit SHA
-        git rev-parse --short HEAD 2>/dev/null
-    fi
+    git rev-parse --short HEAD
 }
 
 check_git_status
