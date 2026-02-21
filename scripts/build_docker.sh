@@ -41,14 +41,11 @@ get_image_tag() {
         echo "$IMAGE_TAG"
     else
         # Use short commit SHA
-        git rev-parse --short HEAD 2>/dev/null || echo "latest"
+        git rev-parse --short HEAD 2>/dev/null
     fi
 }
 
-# Only check git status if we're going to use git SHA for tagging
-if [ -z "${IMAGE_TAG:-}" ]; then
-    check_git_status
-fi
+check_git_status
 
 # Determine image tag
 IMAGE_TAG=$(get_image_tag)
@@ -58,7 +55,7 @@ echo "========================================"
 echo "Building Docker Image: ${FULL_IMAGE}"
 echo "========================================"
 echo "Platform: ${PLATFORM}"
-echo "Git commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+echo "Git commit: ${IMAGE_TAG}"
 echo ""
 
 # Check if buildx is available
@@ -129,6 +126,6 @@ echo "    ${FULL_IMAGE}"
 echo ""
 echo "To push to Docker Hub:"
 echo "  docker login"
-echo "  docker tag ${FULL_IMAGE} bdpedigo/lakefront-ray:${IMAGE_TAG}"
-echo "  docker push bdpedigo/lakefront-ray:${IMAGE_TAG}"
+echo "  docker tag ${FULL_IMAGE} ${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
+echo "  docker push ${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
 echo ""
