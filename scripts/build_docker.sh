@@ -82,7 +82,6 @@ fi
 if [ -n "${PUSH_TO_HUB}" ]; then
     echo "Building and pushing to Docker Hub as ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
     docker buildx build --platform "${PLATFORM}" \
-        -t "${FULL_IMAGE}" \
         -t "${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}" \
         --push \
         .
