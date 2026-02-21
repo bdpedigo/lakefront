@@ -45,8 +45,10 @@ get_image_tag() {
     fi
 }
 
-# Run git status check
-check_git_status
+# Only check git status if we're going to use git SHA for tagging
+if [ -z "${IMAGE_TAG:-}" ]; then
+    check_git_status
+fi
 
 # Determine image tag
 IMAGE_TAG=$(get_image_tag)
@@ -98,6 +100,14 @@ echo "Build Complete!"
 echo "========================================"
 echo ""
 echo "Image: ${FULL_IMAGE}"
+echo "Tag: ${IMAGE_TAG}"
+echo ""
+
+# Export the image tag for use by calling scripts
+if [ -n "${PUSH_TO_HUB}" ]; then
+    echo "LAKEFRONT_IMAGE_TAG=${IMAGE_TAG}"
+fi
+
 echo ""
 echo "To test locally:"
 echo "  1. Start Ray head node:"

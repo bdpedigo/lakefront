@@ -36,14 +36,13 @@ echo ""
 echo "Setting project..."
 gcloud config set project "${PROJECT_ID}"
 
-echo ""
-echo "Deleting Ray cluster from Kubernetes..."
-kubectl delete -f k8s/ray-cluster.yaml --ignore-not-found=true
-kubectl delete -f k8s/ray-service.yaml --ignore-not-found=true
+# echo ""
+# echo "Deleting Ray cluster from Kubernetes..."
+# kubectl delete -f k8s/ray-cluster.yaml --ignore-not-found=true
+# kubectl delete -f k8s/ray-service.yaml --ignore-not-found=true
 
-echo ""
-echo "Waiting for resources to be deleted..."
-sleep 10
+# echo ""
+# echo "Waiting for resources to be deleted..."
 
 echo ""
 echo "Deleting GKE cluster..."

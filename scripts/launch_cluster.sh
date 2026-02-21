@@ -93,36 +93,32 @@ build_and_push_image() {
         echo "To push manually:"
         echo "  export DOCKER_USERNAME=your-username"
         echo "  docker login"
-        echo "  docker tag lakefront-ray:latest \$DOCKER_USERNAME/lakefront-ray:${IMAGE_TAG}"
-        echo "  docker push \$DOCKER_USERNAME/lakefront-ray:${IMAGE_TAG}"
+        echo "  PUSH_TO_HUB=1 ./scripts/build_docker.sh"
         return
     fi
     
     print_header "Building and Pushing Docker Image"
     
-    # Build if not already built
-    if ! docker image inspect lakefront-ray:latest &> /dev/null; then
-        echo "Building Docker image..."
-        ./scripts/build_docker.sh
-    else
-        echo "✓ Docker image already exists"
+    # Build and push using the build script
+    # Capture the output to extract the image tag
+    BUILD_OUTPUT=$(PUSH_TO_HUB=1 DOCKER_USERNAME="${DOCKER_USERNAME}" IMAGE_TAG="${IMAGE_TAG:-}" ./scripts/build_docker.sh 2>&1)
+    
+    # Display the build output
+    echo "$BUILD_OUTPUT"
+    
+    # Extract the image tag from build output (build_docker.sh outputs LAKEFRONT_IMAGE_TAG=xxx)
+    DEPLOYED_IMAGE_TAG=$(echo "$BUILD_OUTPUT" | grep "^LAKEFRONT_IMAGE_TAG=" | cut -d'=' -f2)
+    
+    if [ -z "$DEPLOYED_IMAGE_TAG" ]; then
+        echo "ERROR: Failed to determine image tag from build output"
+        exit 1
     fi
     
-    # Tag for Docker Hub
-    REMOTE_IMAGE="${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
-    echo "Tagging as: ${REMOTE_IMAGE}"
-    docker tag lakefront-ray:latest "${REMOTE_IMAGE}"
+    # Export for use in deploy_ray_cluster
+    export IMAGE_TAG="$DEPLOYED_IMAGE_TAG"
     
-    # Push to Docker Hub
-    echo "Pushing to Docker Hub..."
-    echo "You may need to run 'docker login' first"
-    docker push "${REMOTE_IMAGE}"
-    
-    echo "✓ Image pushed successfully"
     echo ""
-    echo "Update k8s/ray-cluster.yaml:"
-    echo "  image: ${REMOTE_IMAGE}"
-    echo "  imagePullPolicy: Always"
+    echo "✓ Image built and pushed: ${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
 }
 
 create_gke_cluster() {
@@ -265,9 +261,8 @@ create_secrets() {
 deploy_ray_cluster() {
     print_header "Deploying Ray Cluster"
     
-    # Determine image tag (use env var or git commit SHA)
-    DEPLOY_IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD 2>/dev/null || echo 'latest')}"
-    DEPLOY_IMAGE="${DOCKER_USERNAME}/lakefront-ray:${DEPLOY_IMAGE_TAG}"
+    # Use the IMAGE_TAG set by build_and_push_image
+    DEPLOY_IMAGE="${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
     
     echo "Using image: ${DEPLOY_IMAGE}"
     echo ""
