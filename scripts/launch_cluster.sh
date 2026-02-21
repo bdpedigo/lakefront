@@ -101,7 +101,8 @@ build_and_push_image() {
     
     # Build and push using the build script
     # Capture the output to extract the image tag
-    BUILD_OUTPUT=$(PUSH_TO_HUB=1 DOCKER_USERNAME="${DOCKER_USERNAME}" IMAGE_TAG="${IMAGE_TAG:-}" ./scripts/build_docker.sh 2>&1)
+    # Don't pass IMAGE_TAG - let build_docker.sh determine it from git
+    BUILD_OUTPUT=$(PUSH_TO_HUB=1 DOCKER_USERNAME="${DOCKER_USERNAME}" ./scripts/build_docker.sh 2>&1)
     BUILD_EXIT_CODE=$?
     
     # Display the build output
@@ -274,6 +275,14 @@ deploy_ray_cluster() {
     if [ -z "${IMAGE_TAG:-}" ]; then
         echo "ERROR: IMAGE_TAG not set. Build may have failed."
         echo "IMAGE_TAG must be set before deploying."
+        exit 1
+    fi
+    
+    # Never deploy with 'latest' tag - it causes caching issues
+    if [ "${IMAGE_TAG}" = "latest" ]; then
+        echo "ERROR: Cannot deploy with 'latest' tag"
+        echo "This causes image caching issues on GKE nodes."
+        echo "Use a specific tag (git commit SHA or version number)."
         exit 1
     fi
     
