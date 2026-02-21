@@ -31,15 +31,24 @@
 - Defined resource limits (CPU, memory, storage)
 - Created Service for dashboard and client access
 
-### Step 4: Cluster Launch Script (CURRENT)
-- Create a script similar to make_cluster.sh but for KubeRay
-- Handle GKE cluster creation
-- Install KubeRay operator
-- Create Kubernetes secrets
-- Deploy RayCluster
+### Step 4: Cluster Launch Script ✅ COMPLETED
+- Created script similar to make_cluster.sh but for KubeRay
+- Handles GKE cluster creation
+- Installs KubeRay operator
+- Creates Kubernetes secrets
+- Deploys RayCluster
+- Added cleanup script for easy teardown
 
-### Step 5: Job Submission and Testing
-- Create scripts to submit Ray jobs to the remote cluster
-- Test SSH/exec into the cluster
-- Verify end-to-end workflow
-- Document the complete workflow
+### Step 5: Local Testing ✅ COMPLETED
+- Created test_local_k8s.sh script for testing with kind/minikube
+- Handles local cluster creation and image loading
+- Deploys Ray with reduced resources for local testing
+- Sets up NodePort service for localhost access (dashboard on :8265)
+- Runs test job to verify functionality
+- Created cleanup script for easy teardown
+
+### Step 6: Job Submission and Testing ✅ COMPLETED
+- Created scripts to submit Ray jobs to the cluster (submit_job.sh)
+- Created SSH/exec script for interactive access (ssh_cluster.sh)
+- End-to-end workflow verified
+- Complete workflow documented

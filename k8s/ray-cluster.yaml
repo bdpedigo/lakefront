@@ -12,9 +12,6 @@ spec:
   
   # Head node configuration
   headGroupSpec:
-    # The number of head nodes (should always be 1)
-    replicas: 1
-    
     rayStartParams:
       dashboard-host: "0.0.0.0"
       port: "6379"

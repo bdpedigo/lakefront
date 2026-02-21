@@ -7,6 +7,7 @@ FROM python:3.12-slim-bookworm
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
@@ -21,6 +22,11 @@ COPY uv.lock /app/uv.lock
 
 # Install dependencies
 RUN uv sync --frozen
+
+# Create symlinks for ray and python to make them accessible system-wide
+# This ensures KubeRay operator can find them
+RUN ln -s /app/.venv/bin/ray /usr/local/bin/ray && \
+    ln -s /app/.venv/bin/python /usr/local/bin/python3.12-venv
 
 # Copy application code
 COPY jobs/ /app/jobs/
