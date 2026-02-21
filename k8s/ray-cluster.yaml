@@ -1,0 +1,135 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: lakefront-ray-cluster
+  namespace: default
+spec:
+  # Ray version - should match the version in pyproject.toml
+  rayVersion: "2.54.0"
+  
+  # Enable in-tree autoscaling (optional, can be disabled for fixed size clusters)
+  enableInTreeAutoscaling: false
+  
+  # Head node configuration
+  headGroupSpec:
+    # The number of head nodes (should always be 1)
+    replicas: 1
+    
+    rayStartParams:
+      dashboard-host: "0.0.0.0"
+      port: "6379"
+      # Disable usage stats reporting
+      disable-usage-stats: "true"
+    
+    # Pod template for the head node
+    template:
+      spec:
+        containers:
+          - name: ray-head
+            # Use the Docker image we just built
+            # TODO: Update this to your Docker Hub username (e.g., YOUR-USERNAME/lakefront-ray:latest)
+            image: lakefront-ray:latest
+            imagePullPolicy: IfNotPresent
+            
+            # Resource requests and limits for head node
+            resources:
+              requests:
+                memory: "4Gi"
+                cpu: "2"
+                ephemeral-storage: "4Gi"
+              limits:
+                memory: "8Gi"
+                ephemeral-storage: "16Gi"
+            
+            # Environment variables
+            env:
+              - name: RAY_DEDUP_LOGS
+                value: "0"
+              - name: PYTHONUNBUFFERED
+                value: "1"
+              - name: CLOUDSDK_CORE_PROJECT
+                value: ${CLOUDSDK_CORE_PROJECT}
+              - name: GOOGLE_APPLICATION_CREDENTIALS
+                value: "/root/.cloudvolume/secrets/google-secret.json"
+
+            # Ports
+            ports:
+              - containerPort: 6379
+                name: gcs-server
+              - containerPort: 8265
+                name: dashboard
+              - containerPort: 10001
+                name: client
+            
+            # Volume mounts for secrets
+            volumeMounts:
+              - name: secrets-volume
+                mountPath: /root/.cloudvolume/secrets
+                readOnly: true
+        
+        # Volumes - secrets will be created by the cluster launch script
+        volumes:
+          - name: secrets-volume
+            secret:
+              secretName: cloudvolume-secrets
+              optional: true  # Set to true for local testing without secrets
+  
+  # Worker node configuration
+  workerGroupSpecs:
+    - groupName: worker-group
+      replicas: 2  # Number of worker nodes
+      minReplicas: 0  # Can scale down to 0 if autoscaling is enabled
+      maxReplicas: 10  # Maximum workers if autoscaling is enabled
+      
+      rayStartParams:
+        # Workers connect to head node
+        port: "6379"
+      
+      # Pod template for worker nodes
+      template:
+        spec:
+          containers:
+            - name: ray-worker
+              # Same image as head node (update to match head node image)
+              image: lakefront-ray:latest
+              imagePullPolicy: IfNotPresent
+              
+              # Resource requests and limits for workers
+              # These should be tuned based on your workload
+              resources:
+                requests:
+                  memory: "8Gi"
+                  cpu: "4"
+                  ephemeral-storage: "8Gi"
+                limits:
+                  memory: "32Gi"
+                  ephemeral-storage: "32Gi"
+              
+              # Environment variables (same as head node)
+              env:
+                - name: RAY_DEDUP_LOGS
+                  value: "0"
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                # Add threading limits if needed
+                - name: OPENBLAS_NUM_THREADS
+                  value: "1"
+                - name: MKL_NUM_THREADS
+                  value: "1"
+                - name: NUMEXPR_NUM_THREADS
+                  value: "1"
+                - name: OMP_NUM_THREADS
+                  value: "1"
+              
+              # Volume mounts for secrets (same as head node)
+              volumeMounts:
+                - name: secrets-volume
+                  mountPath: /root/.cloudvolume/secrets
+                  readOnly: true
+          
+          # Volumes (same as head node)
+          volumes:
+            - name: secrets-volume
+              secret:
+                secretName: cloudvolume-secrets
+                optional: true
