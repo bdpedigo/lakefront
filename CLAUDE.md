@@ -1,0 +1,5 @@
+- We are trying to create a deployment which uses Ray to run workloads on a remote cluster, but we want to start by running everything locally on our laptop for development and testing. This will allow us to iterate quickly without needing to set up a full remote cluster right away.
+- We would like to target KubeRay for the remote cluster deployment.
+- We have some specific authentication issues that need to be implemented to make this work in our stack.
+- In the /old_examples folder there are example dockerfiles, cluster launch scripts, and kubernetes yaml files. These were for different workflows and did not use Ray. But we should use them as a starting point for configuring our Ray cluster and workloads.
+- Always iterate slowly and test locally before moving to remote deployment. This will help us catch issues early and ensure our code works correctly in a simple environment before adding the complexity of remote execution.
