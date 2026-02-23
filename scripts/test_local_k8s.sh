@@ -55,7 +55,7 @@ check_prerequisites() {
     
     if ! docker image inspect lakefront-ray:latest &> /dev/null; then
         echo "ERROR: Docker image not found. Build it first:"
-        echo "  ./scripts/build_docker.sh"
+        echo "  LOCAL_ONLY=1 ./scripts/build_and_push.sh"
         exit 1
     fi
     

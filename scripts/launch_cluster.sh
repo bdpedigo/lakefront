@@ -93,7 +93,7 @@ build_and_push_image() {
         echo "To push manually:"
         echo "  export DOCKER_USERNAME=your-username"
         echo "  docker login"
-        echo "  PUSH_TO_HUB=1 ./scripts/build_docker.sh"
+        echo "  ./scripts/build_and_push.sh"
         return
     fi
     
@@ -101,8 +101,8 @@ build_and_push_image() {
     
     # Build and push using the build script
     # Capture the output to extract the image tag
-    # Don't pass IMAGE_TAG - let build_docker.sh determine it from git
-    BUILD_OUTPUT=$(PUSH_TO_HUB=1 DOCKER_USERNAME="${DOCKER_USERNAME}" ./scripts/build_docker.sh 2>&1)
+    # Don't pass IMAGE_TAG - let build_and_push.sh determine it from git
+    BUILD_OUTPUT=$(DOCKER_USERNAME="${DOCKER_USERNAME}" ./scripts/build_and_push.sh 2>&1)
     BUILD_EXIT_CODE=$?
     
     # Display the build output
@@ -115,7 +115,7 @@ build_and_push_image() {
         exit 1
     fi
     
-    # Extract the image tag from build output (build_docker.sh outputs LAKEFRONT_IMAGE_TAG=xxx)
+    # Extract the image tag from build output (build_and_push.sh outputs LAKEFRONT_IMAGE_TAG=xxx)
     DEPLOYED_IMAGE_TAG=$(echo "$BUILD_OUTPUT" | grep "^LAKEFRONT_IMAGE_TAG=" | cut -d'=' -f2)
     
     if [ -z "$DEPLOYED_IMAGE_TAG" ]; then

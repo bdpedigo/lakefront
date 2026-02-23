@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to build and test the Ray Docker image locally
+# Script to build and push the Ray Docker image
 
 set -e  # Exit on error
 
@@ -7,6 +7,7 @@ IMAGE_NAME="lakefront-ray"
 PLATFORM="${PLATFORM:-linux/amd64}"  # Default to AMD64 for GKE compatibility
 DOCKER_USERNAME="${DOCKER_USERNAME:-bdpedigo}"
 AUTO_COMMIT="${AUTO_COMMIT:-}"  # Set to 1 to auto-commit changes
+LOCAL_ONLY="${LOCAL_ONLY:-}"  # Set to 1 to skip pushing to Docker Hub
 
 # Check for uncommitted changes
 check_git_status() {
@@ -44,13 +45,18 @@ check_git_status
 
 # Determine image tag
 IMAGE_TAG=$(get_image_tag)
-FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
+FULL_IMAGE="${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo "========================================"
 echo "Building Docker Image: ${FULL_IMAGE}"
 echo "========================================"
 echo "Platform: ${PLATFORM}"
 echo "Git commit: ${IMAGE_TAG}"
+if [ -n "$LOCAL_ONLY" ]; then
+    echo "Mode: LOCAL ONLY (not pushing to Docker Hub)"
+else
+    echo "Mode: Build and push to Docker Hub"
+fi
 echo ""
 
 # Check if buildx is available
@@ -70,18 +76,19 @@ else
 fi
 
 # Build the image for the target platform
-# Use --load to load into local docker, or --push to push directly
-if [ -n "${PUSH_TO_HUB}" ]; then
-    echo "Building and pushing to Docker Hub as ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+if [ -n "$LOCAL_ONLY" ]; then
+    echo "Building for local use only..."
     docker buildx build --platform "${PLATFORM}" \
-        -t "${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}" \
-        --push \
+        -t "${IMAGE_NAME}:${IMAGE_TAG}" \
+        -t "${IMAGE_NAME}:latest" \
+        --load \
         .
 else
-    echo "Building for local use..."
+    echo "Building and pushing to Docker Hub..."
     docker buildx build --platform "${PLATFORM}" \
         -t "${FULL_IMAGE}" \
-        --load \
+        -t "${DOCKER_USERNAME}/${IMAGE_NAME}:latest" \
+        --push \
         .
 fi
 
@@ -95,32 +102,37 @@ echo "Tag: ${IMAGE_TAG}"
 echo ""
 
 # Export the image tag for use by calling scripts
-if [ -n "${PUSH_TO_HUB}" ]; then
-    echo "LAKEFRONT_IMAGE_TAG=${IMAGE_TAG}"
-fi
+echo "LAKEFRONT_IMAGE_TAG=${IMAGE_TAG}"
 
-echo ""
-echo "To test locally:"
-echo "  1. Start Ray head node:"
-echo "     docker run -d --name ray-head -p 8265:8265 -p 6379:6379 ${FULL_IMAGE}"
-echo ""
-echo "  2. Check Ray dashboard:"
-echo "     open http://localhost:8265"
-echo ""
-echo "  3. Submit a test job:"
-echo "     docker exec ray-head python jobs/simple_job.py"
-echo ""
-echo "  4. Stop and remove container:"
-echo "     docker stop ray-head && docker rm ray-head"
-echo ""
-echo "To mount secrets (for production testing):"
-echo "  docker run -d --name ray-head \\"
-echo "    -p 8265:8265 -p 6379:6379 \\"
-echo "    -v \$HOME/.cloudvolume/secrets:/root/.cloudvolume/secrets:ro \\"
-echo "    ${FULL_IMAGE}"
-echo ""
-echo "To push to Docker Hub:"
-echo "  docker login"
-echo "  docker tag ${FULL_IMAGE} ${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
-echo "  docker push ${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
+if [ -n "$LOCAL_ONLY" ]; then
+    echo ""
+    echo "To test locally:"
+    echo "  1. Start Ray head node:"
+    echo "     docker run -d --name ray-head -p 8265:8265 -p 6379:6379 ${IMAGE_NAME}:${IMAGE_TAG}"
+    echo ""
+    echo "  2. Check Ray dashboard:"
+    echo "     open http://localhost:8265"
+    echo ""
+    echo "  3. Submit a test job:"
+    echo "     docker exec ray-head python jobs/simple_job.py"
+    echo ""
+    echo "  4. Stop and remove container:"
+    echo "     docker stop ray-head && docker rm ray-head"
+    echo ""
+    echo "To mount secrets (for production testing):"
+    echo "  docker run -d --name ray-head \\"
+    echo "    -p 8265:8265 -p 6379:6379 \\"
+    echo "    -v \$HOME/.cloudvolume/secrets:/root/.cloudvolume/secrets:ro \\"
+    echo "    ${IMAGE_NAME}:${IMAGE_TAG}"
+    echo ""
+    echo "To push to Docker Hub later:"
+    echo "  docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${FULL_IMAGE}"
+    echo "  docker push ${FULL_IMAGE}"
+else
+    echo ""
+    echo "✓ Image pushed to Docker Hub: ${FULL_IMAGE}"
+    echo ""
+    echo "To deploy to cluster:"
+    echo "  ./scripts/submit_job.sh"
+fi
 echo ""
