@@ -1,0 +1,38 @@
+# Use Python 3.12 with UV pre-installed (optimized for Python workloads)
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install Google Cloud SDK properly with all dependencies
+# The key is to install python3 and make sure it's available at /usr/bin/python3
+# AND create a 'python' symlink because gcloud expects it
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    gnupg \
+    apt-transport-https \
+    ca-certificates \
+    python-is-python3 \
+    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
+    && apt-get update \
+    && apt-get install -y google-cloud-cli \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency files first (for better caching)
+COPY pyproject.toml ./
+
+# Install dependencies using UV
+RUN uv sync --no-dev
+
+# Create scripts directory
+RUN mkdir -p /scripts
+
+# Copy the scripts directory from the host
+COPY scripts/ /scripts/
+
+# Create directory for secrets (will be mounted at runtime)
+RUN mkdir -p /root/.cloudvolume/secrets
+

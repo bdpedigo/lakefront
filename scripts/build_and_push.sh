@@ -3,9 +3,10 @@
 
 set -e  # Exit on error
 
-IMAGE_NAME="lakefront-ray"
+IMAGE_NAME="${IMAGE_NAME:-lakefront-ray}"  # Default image name
 PLATFORM="${PLATFORM:-linux/amd64}"  # Default to AMD64 for GKE compatibility
 DOCKER_USERNAME="${DOCKER_USERNAME:-bdpedigo}"
+DOCKERFILE="${DOCKERFILE:-Dockerfile}"  # Default Dockerfile
 AUTO_COMMIT="${AUTO_COMMIT:-}"  # Set to 1 to auto-commit changes
 LOCAL_ONLY="${LOCAL_ONLY:-}"  # Set to 1 to skip pushing to Docker Hub
 
@@ -79,6 +80,7 @@ fi
 if [ -n "$LOCAL_ONLY" ]; then
     echo "Building for local use only..."
     docker buildx build --platform "${PLATFORM}" \
+        -f "${DOCKERFILE}" \
         -t "${IMAGE_NAME}:${IMAGE_TAG}" \
         -t "${IMAGE_NAME}:latest" \
         --load \
@@ -86,6 +88,7 @@ if [ -n "$LOCAL_ONLY" ]; then
 else
     echo "Building and pushing to Docker Hub..."
     docker buildx build --platform "${PLATFORM}" \
+        -f "${DOCKERFILE}" \
         -t "${FULL_IMAGE}" \
         -t "${DOCKER_USERNAME}/${IMAGE_NAME}:latest" \
         --push \

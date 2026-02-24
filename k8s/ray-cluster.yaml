@@ -74,7 +74,7 @@ spec:
   # Worker node configuration
   workerGroupSpecs:
     - groupName: worker-group
-      replicas: 1  # Number of worker nodes
+      replicas: 0  # Number of worker nodes
       minReplicas: 0  # Can scale down to 0 if autoscaling is enabled
       maxReplicas: 10  # Maximum workers if autoscaling is enabled
       
