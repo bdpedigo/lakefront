@@ -53,26 +53,26 @@ check_prerequisites() {
     print_header "Checking Prerequisites"
     
     # Check gcloud
-    if ! command -v gcloud &> /dev/null; then
+    if [ ! command -v gcloud &> /dev/null ]; then
         echo "ERROR: gcloud CLI not found. Please install it first."
         exit 1
     fi
     
     # Check kubectl
-    if ! command -v kubectl &> /dev/null; then
+    if [ ! command -v kubectl &> /dev/null ]; then
         echo "ERROR: kubectl not found. Please install it first."
         exit 1
     fi
     
     # Check helm
-    if ! command -v helm &> /dev/null; then
+    if [ ! command -v helm &> /dev/null ]; then
         echo "ERROR: helm not found. Please install it first."
         echo "Install with: brew install helm"
         exit 1
     fi
     
     # Check docker
-    if ! command -v docker &> /dev/null; then
+    if [ ! command -v docker &> /dev/null ]; then
         echo "ERROR: docker not found. Please install it first."
         exit 1
     fi
@@ -371,14 +371,13 @@ print_cluster_info() {
     echo "Useful commands:"
     echo "  # Get cluster status"
     echo "  kubectl get raycluster"
-    echo ""GKE Cluster Setup for Lakefront"
-    echo "Project: ${PROJECT_ID}"
-    echo "Cluster: ${CLUSTER_NAME}"
-    echo "Zone: ${ZONE}"
-    echo "Machine Type: ${MACHINE_TYPE}"
-    echo "Nodes: ${NUM_NODES}"
-    echo "Docker Image: ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-    echo "Deployment YAML: ${DEPLOYMENT_YAML
+    echo ""
+    echo "  # Get pods"
+    echo "  kubectl get pods -l ray.io/cluster=${IMAGE_NAME}-cluster"
+    echo ""
+    echo "  # SSH into head node"
+    echo "  kubectl exec -it \$(kubectl get pod -l ray.io/node-type=head -o name) -- bash"
+    echo ""
     echo "  # View logs"
     echo "  kubectl logs \$(kubectl get pod -l ray.io/node-type=head -o name)"
     echo ""
@@ -391,13 +390,16 @@ print_cluster_info() {
 #==============================================================================
 
 main() {
-    print_header "KubeRay Cluster Setup for Lakefront"
+    print_header "GKE Cluster Setup for Lakefront"
     echo "Project: ${PROJECT_ID}"
-    echo "Cluster: ${CLUSTER_NAME}" || grep -q "ray.io/cluster" "${DEPLOYMENT_YAML}"; then
-        install_kuberay_operator
-    fi
-    create_secrets
-    deploy_workload
+    echo "Cluster: ${CLUSTER_NAME}"
+    echo "Zone: ${ZONE}"
+    echo "Machine Type: ${MACHINE_TYPE}"
+    echo "Nodes: ${NUM_NODES}"
+    echo "Docker Image: ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+    echo "Deployment YAML: ${DEPLOYMENT_YAML}"
+    echo ""
+    
     check_prerequisites
     
     read -p "Continue with cluster creation? (y/N): " -n 1 -r
@@ -410,13 +412,11 @@ main() {
     # build_and_push_image
     create_gke_cluster
     # check if ray is in $ image name, install kuberay operator if so
-    if [[ "$IMAGE_NAME" == *"ray"* ]]; then
+    if [[ "$IMAGE_NAME" == *"ray"* ]] || grep -q "ray.io/cluster" "${DEPLOYMENT_YAML}"; then
         install_kuberay_operator
     fi
     create_secrets
-    if [[ "$IMAGE_NAME" == *"ray"* ]]; then
-        deploy_ray_cluster
-    fi
+    deploy_workload
     print_cluster_info
     
     print_header "Setup Complete!"

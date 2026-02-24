@@ -41,6 +41,7 @@ RUN ln -s /app/.venv/bin/ray /usr/local/bin/ray && \
 # Copy application code
 COPY jobs/ /app/jobs/
 COPY scripts/ /app/scripts/
+COPY scratch/ /app/scratch/
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
