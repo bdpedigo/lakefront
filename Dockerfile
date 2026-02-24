@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     wget \
     gnupg \
+    gzip \
     apt-transport-https \
     ca-certificates \
     python-is-python3 \
