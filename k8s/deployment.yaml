@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: lakefront
+  name: lakefront
+spec:
+  replicas: 1 # number of pods to run
+  selector:
+    matchLabels:
+      app: lakefront
+  strategy:
+    rollingUpdate:
+      maxSurge: 100%
+      maxUnavailable: 100%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: lakefront
+    spec:
+      containers:
+        - image: bdpedigo/lakefront:latest
+          name: lakefront
+          imagePullPolicy: Always
+          command: ["/bin/sh"]
+          args: ["-c", "while true; do uv run scripts/run_local.py; done"]
+          env:
+            - name: CLOUDSDK_CORE_PROJECT
+              value: ${CLOUDSDK_CORE_PROJECT}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/root/.cloudvolume/secrets/google-secret.json"
+            - name: VERBOSE
+              value: "false"
+            - name: N_JOBS
+              value: "1"
+            - name: OPENBLAS_NUM_THREADS
+              value: "1"
+            - name: MKL_NUM_THREADS
+              value: "1"
+            - name: NUMEXPR_NUM_THREADS
+              value: "1"
+            - name: OMP_NUM_THREADS
+              value: "1"
+          resources:
+            requests:
+              memory: 4.0Gi
+              cpu: "900m"
+              ephemeral-storage: "4Gi"
+            limits:
+              memory: "32.0Gi"
+              ephemeral-storage: "16Gi"
+          volumeMounts:
+            - name: secrets-volume
+              mountPath: /root/.cloudvolume/secrets
+      dnsPolicy: Default
+      volumes:
+        - name: secrets-volume
+          secret:
+            secretName: secrets

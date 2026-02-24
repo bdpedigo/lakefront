@@ -25,6 +25,11 @@ DISK_TYPE="${DISK_TYPE:-pd-standard}"
 # Docker Image Configuration
 DOCKER_USERNAME="${DOCKER_USERNAME:-bdpedigo}"  # Set via environment or command line
 IMAGE_TAG=$(git rev-parse --short HEAD)
+IMAGE_NAME="${IMAGE_NAME:-lakefront-ray}" # Default image name
+
+# Deployment YAML Configuration
+DEPLOYMENT_YAML="${DEPLOYMENT_YAML:-k8s/ray-cluster.yaml}"  # Path to deployment yaml
+SERVICE_YAML="${SERVICE_YAML:-k8s/ray-service.yaml}"  # Path to service yaml (optional)
 
 # Network Configuration (optional - remove these flags if using default network)
 NETWORK="projects/${PROJECT_ID}/global/networks/patchseq"
@@ -128,7 +133,7 @@ build_and_push_image() {
     export IMAGE_TAG="$DEPLOYED_IMAGE_TAG"
 
     echo ""
-    echo "✓ Image built and pushed: ${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
+    echo "✓ Image built and pushed: ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
 }
 
 create_gke_cluster() {
@@ -268,8 +273,8 @@ create_secrets() {
     echo "✓ Secrets created"
 }
 
-deploy_ray_cluster() {
-    print_header "Deploying Ray Cluster"
+deploy_workload() {
+    print_header "Deploying Workload"
     
     # Verify IMAGE_TAG is set (should be set by build_and_push_image)
     if [ -z "${IMAGE_TAG:-}" ]; then
@@ -287,30 +292,49 @@ deploy_ray_cluster() {
     fi
     
     # Use the IMAGE_TAG set by build_and_push_image
-    DEPLOY_IMAGE="${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
+    DEPLOY_IMAGE="${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
     
+    echo "Using deployment YAML: ${DEPLOYMENT_YAML}"
     echo "Using image: ${DEPLOY_IMAGE}"
     echo ""
     
-    # Apply Ray cluster configuration with image substitution
-    echo "Applying Ray cluster configuration..."
-    sed "s|image: bdpedigo/lakefront-ray:.*|image: ${DEPLOY_IMAGE}|g" k8s/ray-cluster.yaml | kubectl apply -f -
+    # Check if deployment yaml exists
+    if [ ! -f "${DEPLOYMENT_YAML}" ]; then
+        echo "ERROR: Deployment YAML not found: ${DEPLOYMENT_YAML}"
+        exit 1
+    fi
     
-    # Apply Ray service
-    echo "Applying Ray service..."
-    kubectl apply -f k8s/ray-service.yaml
+    # Apply deployment configuration with image substitution
+    echo "Applying deployment configuration..."
+    # Support both bdpedigo/lakefront and bdpedigo/${IMAGE_NAME} patterns
+    sed "s|image: bdpedigo/lakefront:.*|image: ${DEPLOY_IMAGE}|g; s|image: bdpedigo/${IMAGE_NAME}:.*|image: ${DEPLOY_IMAGE}|g" "${DEPLOYMENT_YAML}" | kubectl apply -f -
+    
+    # Apply service if specified and exists
+    if [ -n "${SERVICE_YAML}" ] && [ -f "${SERVICE_YAML}" ]; then
+        echo "Applying service..."
+        kubectl apply -f "${SERVICE_YAML}"
+    fi
     
     echo ""
-    echo "Waiting for Ray head node to be ready..."
+    echo "Waiting for pods to be ready..."
     echo "(This may take a few minutes while the image is pulled)"
     
-    # Wait for head node
-    kubectl wait --for=condition=ready pod \
-        -l ray.io/cluster=lakefront-ray-cluster \
-        -l ray.io/node-type=head \
-        --timeout=600s
+    # Detect deployment type and wait accordingly
+    if [[ "$IMAGE_NAME" == *"ray"* ]] || grep -q "ray.io/cluster" "${DEPLOYMENT_YAML}"; then
+        # Wait for Ray head node
+        kubectl wait --for=condition=ready pod \
+            -l ray.io/cluster \
+            -l ray.io/node-type=head \
+            --timeout=600s 2>/dev/null || echo "Note: Not a Ray cluster or Ray pods not labeled"
+    else
+        # Wait for generic deployment
+        DEPLOYMENT_NAME=$(grep "name:" "${DEPLOYMENT_YAML}" | head -1 | awk '{print $2}')
+        if [ -n "$DEPLOYMENT_NAME" ]; then
+            kubectl rollout status deployment/"${DEPLOYMENT_NAME}" --timeout=600s || echo "Deployment rollout status check skipped"
+        fi
+    fi
     
-    echo "✓ Ray cluster deployed"
+    echo "✓ Workload deployed"
 }
 
 print_cluster_info() {
@@ -325,35 +349,36 @@ print_cluster_info() {
     echo ""
     
     echo "Ray Pods:"
-    kubectl get pods -l ray.io/cluster=lakefront-ray-cluster
+    kubectl get pods -l ray.io/cluster=${IMAGE_NAME}-cluster
     echo ""
     
     echo "Ray Service:"
-    kubectl get service lakefront-ray-head
+    kubectl get service ${IMAGE_NAME}-head
     echo ""
     
     # Get external IP
-    EXTERNAL_IP=$(kubectl get service lakefront-ray-head -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
+    EXTERNAL_IP=$(kubectl get service ${IMAGE_NAME}-head -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
     
     if [ "$EXTERNAL_IP" != "pending" ] && [ -n "$EXTERNAL_IP" ]; then
         echo "Ray Dashboard: http://${EXTERNAL_IP}:8265"
         echo "Ray Client: ray://\${EXTERNAL_IP}:10001"
     else
         echo "External IP is pending. Run this to check status:"
-        echo "  kubectl get service lakefront-ray-head --watch"
+        echo "  kubectl get service ${IMAGE_NAME}-head --watch"
     fi
     
     echo ""
     echo "Useful commands:"
     echo "  # Get cluster status"
     echo "  kubectl get raycluster"
-    echo ""
-    echo "  # Get pods"
-    echo "  kubectl get pods -l ray.io/cluster=lakefront-ray-cluster"
-    echo ""
-    echo "  # SSH into head node"
-    echo "  kubectl exec -it \$(kubectl get pod -l ray.io/node-type=head -o name) -- bash"
-    echo ""
+    echo ""GKE Cluster Setup for Lakefront"
+    echo "Project: ${PROJECT_ID}"
+    echo "Cluster: ${CLUSTER_NAME}"
+    echo "Zone: ${ZONE}"
+    echo "Machine Type: ${MACHINE_TYPE}"
+    echo "Nodes: ${NUM_NODES}"
+    echo "Docker Image: ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+    echo "Deployment YAML: ${DEPLOYMENT_YAML
     echo "  # View logs"
     echo "  kubectl logs \$(kubectl get pod -l ray.io/node-type=head -o name)"
     echo ""
@@ -368,13 +393,11 @@ print_cluster_info() {
 main() {
     print_header "KubeRay Cluster Setup for Lakefront"
     echo "Project: ${PROJECT_ID}"
-    echo "Cluster: ${CLUSTER_NAME}"
-    echo "Zone: ${ZONE}"
-    echo "Machine Type: ${MACHINE_TYPE}"
-    echo "Nodes: ${NUM_NODES}"
-    echo "Docker Image: ${DOCKER_USERNAME}/lakefront-ray:${IMAGE_TAG}"
-    echo ""
-    
+    echo "Cluster: ${CLUSTER_NAME}" || grep -q "ray.io/cluster" "${DEPLOYMENT_YAML}"; then
+        install_kuberay_operator
+    fi
+    create_secrets
+    deploy_workload
     check_prerequisites
     
     read -p "Continue with cluster creation? (y/N): " -n 1 -r
@@ -386,13 +409,18 @@ main() {
     
     # build_and_push_image
     create_gke_cluster
-    install_kuberay_operator
+    # check if ray is in $ image name, install kuberay operator if so
+    if [[ "$IMAGE_NAME" == *"ray"* ]]; then
+        install_kuberay_operator
+    fi
     create_secrets
-    deploy_ray_cluster
+    if [[ "$IMAGE_NAME" == *"ray"* ]]; then
+        deploy_ray_cluster
+    fi
     print_cluster_info
     
     print_header "Setup Complete!"
-    echo "Your Ray cluster is ready to use."
+    echo "Your cluster is ready to use."
 }
 
 # Run main function
