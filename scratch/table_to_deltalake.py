@@ -30,13 +30,15 @@ def make_csv_dump_request(table_name: str, client: CAVEclient) -> int:
         An instance of CAVEclient to use for authentication and API access. Should have
         version set.
     """
-    base_url = f"{client.info.get_datastack_info()['local_server']}/materialize"
-    endpoint = f"/api/v2/materialize/run/dump_csv_table/datastack/{client.datastack_name}/version/{client.version}/table_name/{table_name}/"
+    base_url = (
+        f"{client.info.get_datastack_info()['local_server']}/materialize"  # ty: ignore
+    )
+    endpoint = f"/api/v2/materialize/run/dump_csv_table/datastack/{client.datastack_name}/version/{client.version}/table_name/{table_name}/"  # ty: ignore
 
     url = base_url + endpoint
 
     # Headers to match the working curl command
-    headers = client.auth.request_header
+    headers = client.auth.request_header  # ty: ignore
 
     print(f"Making request to dump table {table_name} via API...")
 
@@ -192,15 +194,14 @@ bloom_filter_columns = [
 fpp = float(os.getenv("FPP", "0.001"))
 
 # FOR TESTING
-
-datastack = "v1dd"
-version = 1196
-table_name = "proofreading_status_and_strategy"
-segmentation_postfix = "__aibs_v1dd"
-mat_db_cloud_path = "gs://cave_annotation_bucket/public"
-n_partitions = 1
-zorder_columns = ["pt_root_id", "id"]
-bloom_filter_columns = []
+# datastack = "v1dd"
+# version = 1196
+# table_name = "proofreading_status_and_strategy"
+# segmentation_postfix = "__aibs_v1dd"
+# mat_db_cloud_path = "gs://cave_annotation_bucket/public"
+# n_partitions = 1
+# zorder_columns = ["pt_root_id", "id"]
+# bloom_filter_columns = []
 
 # print out all parameters for reference
 print()
@@ -238,9 +239,9 @@ for table in table_names:
     # exists = CloudFile(
     #     f"{mat_db_cloud_path}{datastack}/v{version}/{table}.csv.gz"
     # ).exists()
-    # # assert exists, (
-    # #     f"CSV dump for table {table} does not exist at expected path {mat_db_cloud_path}/{datastack}/v{version}/{table}.csv.gz after triggering dump"
-    # # )
+    # assert exists, (
+    #     f"CSV dump for table {table} does not exist at expected path {mat_db_cloud_path}/{datastack}/v{version}/{table}.csv.gz after triggering dump"
+    # )
     # print(
     #     f"CSV dump for table {table} at {mat_db_cloud_path}/{datastack}/v{version}/{table}.csv.gz exists: {exists}"
     # )
@@ -388,7 +389,7 @@ def sql_to_polars_dtype(sql_type: str) -> pl.datatypes.DataType:
         raise ValueError(
             f"Unrecognized SQL dtype: {sql_type!r}. Valid options: {valid}"
         )
-    return SQL_TO_POLARS_DTYPE[sql_type]
+    return SQL_TO_POLARS_DTYPE[sql_type]  # ty: ignore
 
 
 def build_polars_schema(schema_df, string_boolean_columns=None):
@@ -415,7 +416,7 @@ def build_polars_schema(schema_df, string_boolean_columns=None):
 
 # decoder for WKB point columns, if necessary
 # TODO int32 is hard-coded here, make more flexible
-def decoder(x: str) -> np.ndarray[np.int32]:
+def decoder(x: str) -> np.ndarray:
     point = wkb.loads(bytes.fromhex(x))
     out = np.array([point.x, point.y, point.z], dtype=np.int32)
     return out
@@ -425,12 +426,12 @@ def id_partition_func(
     id_to_encode: int,
     n_partitions: int = 256,
     use_seg_id: bool = False,
-    cv: CloudVolume = None,
+    cv: CloudVolume = None,  # ty: ignore
 ) -> np.uint16:
     if id_to_encode == 0:
         return np.uint16(0)
     if use_seg_id:
-        id_to_encode = cv.meta.decode_segid(id_to_encode)
+        id_to_encode = cv.meta.decode_segid(id_to_encode)  # ty: ignore
 
     # salt = 123456
     # partition = hash(id_to_encode ^ salt) % n_partitions
@@ -449,9 +450,9 @@ def scan_csv_with_header(table_path, header_path) -> pl.LazyFrame:
 
     # Track which columns were boolean in the original schema
     boolean_string_columns = [
-        row.field
+        row.field  # ty: ignore
         for row in header.itertuples(index=False)
-        if row.dtype.strip().lower() == "boolean"
+        if row.dtype.strip().lower() == "boolean"  # ty: ignore
     ]
 
     schema = build_polars_schema(header, string_boolean_columns=boolean_string_columns)
@@ -562,16 +563,16 @@ while unfinished:
 
     # Process the chunk...
     # If the chunk is empty, we're done
-    if chunk_table.is_empty():
+    if chunk_table.is_empty():  # ty: ignore
         unfinished = False
     else:
         print(f"Writing chunk for rows {start:,} to {start + n_rows_per_chunk:,}...")
         write_deltalake(
-            out_path,
+            str(out_path),
             chunk_table,
             partition_by=partition_by,
             mode=write_mode,
-        )
+        )  # ty: ignore
         start += n_rows_per_chunk
 
 print(f"{time.time() - write_time:.3f} seconds elapsed to read and write table.")

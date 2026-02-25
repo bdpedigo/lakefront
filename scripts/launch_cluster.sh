@@ -14,7 +14,7 @@ ZONE="${GKE_ZONE:-us-west1-c}"
 REGION="${GKE_REGION:-us-west1}"
 
 # Cluster Configuration
-MACHINE_TYPE="${MACHINE_TYPE:-e2-standard-4}"  # 4 vCPUs, 16GB RAM
+MACHINE_TYPE="${MACHINE_TYPE:-e2-highmem-16}"  # 4 vCPUs, 16GB RAM
 NUM_NODES="${NUM_NODES:-1}"
 CLUSTER_NAME="${CLUSTER_NAME:-lakefront-ray-cluster}"
 
@@ -180,7 +180,7 @@ create_gke_cluster() {
         --disk-size="${DISK_SIZE}" \
         --metadata disable-legacy-endpoints=true \
         --scopes="https://www.googleapis.com/auth/devstorage.read_only","https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring","https://www.googleapis.com/auth/servicecontrol","https://www.googleapis.com/auth/service.management.readonly","https://www.googleapis.com/auth/trace.append" \
-        --preemptible \
+        --spot \
         --num-nodes="${NUM_NODES}" \
         --logging=SYSTEM,WORKLOAD \
         --monitoring=SYSTEM \
@@ -304,6 +304,28 @@ deploy_workload() {
         exit 1
     fi
     
+    # Check if this is a RayCluster deployment
+    if grep -q "kind: RayCluster" "${DEPLOYMENT_YAML}"; then
+        # Get the RayCluster name from the YAML
+        RAYCLUSTER_NAME=$(grep "name:" "${DEPLOYMENT_YAML}" | head -1 | awk '{print $2}')
+        
+        # Check if RayCluster already exists
+        if kubectl get raycluster "${RAYCLUSTER_NAME}" &> /dev/null; then
+            echo "RayCluster '${RAYCLUSTER_NAME}' already exists"
+            echo "To update the Docker image, the RayCluster must be deleted and recreated"
+            read -p "Delete and recreate RayCluster? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo "Deleting existing RayCluster..."
+                kubectl delete raycluster "${RAYCLUSTER_NAME}"
+                echo "Waiting for pods to terminate..."
+                sleep 5
+            else
+                echo "Keeping existing RayCluster (image will NOT be updated)"
+            fi
+        fi
+    fi
+    
     # Apply deployment configuration with image substitution
     echo "Applying deployment configuration..."
     # Support both bdpedigo/lakefront and bdpedigo/${IMAGE_NAME} patterns
@@ -325,7 +347,7 @@ deploy_workload() {
         kubectl wait --for=condition=ready pod \
             -l ray.io/cluster \
             -l ray.io/node-type=head \
-            --timeout=600s 2>/dev/null || echo "Note: Not a Ray cluster or Ray pods not labeled"
+            --timeout=200s 2>/dev/null || echo "Note: Not a Ray cluster or Ray pods not labeled"
     else
         # Wait for generic deployment
         DEPLOYMENT_NAME=$(grep "name:" "${DEPLOYMENT_YAML}" | head -1 | awk '{print $2}')
@@ -333,7 +355,7 @@ deploy_workload() {
             kubectl rollout status deployment/"${DEPLOYMENT_NAME}" --timeout=600s || echo "Deployment rollout status check skipped"
         fi
     fi
-    
+
     echo "✓ Workload deployed"
 }
 

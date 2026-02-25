@@ -63,6 +63,16 @@ spec:
               - name: secrets-volume
                 mountPath: /root/.cloudvolume/secrets
                 readOnly: true
+            
+            # Lifecycle hook to authenticate with gcloud on startup
+            lifecycle:
+              postStart:
+                exec:
+                  command:
+                    - /bin/bash
+                    - -c
+                    - |
+                      gcloud auth activate-service-account --key-file /root/.cloudvolume/secrets/google-secret.json &> /dev/null || echo "Note: Google service account key file not found or invalid. Check your secrets directory."
         
         # Volumes - secrets will be created by the cluster launch script
         volumes:
@@ -105,6 +115,8 @@ spec:
               
               # Environment variables (same as head node)
               env:
+                - name: GOOGLE_APPLICATION_CREDENTIALS
+                  value: "/root/.cloudvolume/secrets/google-secret.json"
                 - name: RAY_DEDUP_LOGS
                   value: "0"
                 - name: PYTHONUNBUFFERED
@@ -124,6 +136,16 @@ spec:
                 - name: secrets-volume
                   mountPath: /root/.cloudvolume/secrets
                   readOnly: true
+              
+              # Lifecycle hook to authenticate with gcloud on startup
+              lifecycle:
+                postStart:
+                  exec:
+                    command:
+                      - /bin/bash
+                      - -c
+                      - |
+                        gcloud auth activate-service-account --key-file /root/.cloudvolume/secrets/google-secret.json &> /dev/null || echo "Note: Google service account key file not found or invalid. Check your secrets directory."
           
           # Volumes (same as head node)
           volumes:
