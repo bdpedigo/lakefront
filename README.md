@@ -10,20 +10,32 @@ To build and push the Docker image:
 ./scripts/build_and_push.sh
 ```
 
-To build and push without Ray: 
-
-```bash
-IMAGE_NAME="lakefront" DOCKERFILE="Dockerfile.noray" ./scripts/build_and_push.sh
-```
-
 To start a Ray cluster on GKE:
 
 ```bash
 ./scripts/launch_cluster.sh
 ```
 
-To start a cluster without Ray:
+To sync local files in scratch to the Ray head node (say, if iterating on scripts):
 
 ```bash
-IMAGE_NAME="lakefront" DOCKERFILE="Dockerfile.noray" ./scripts/launch_cluster.sh
+./scripts/sync_scratch.sh
+```
+
+To SSH into the Ray head node:
+
+```bash
+./scripts/ssh_cluster.sh
+```
+
+To SSH into the Ray head node and immediately run another script:
+
+```bash
+./scripts/ssh_cluster.sh -- ./scripts/job.sh
+```
+
+To launch Jupyter Lab on the Ray head node and connect to it from your local machine:
+
+```bash
+./scripts/jupyter_connect.sh
 ```
