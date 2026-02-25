@@ -18,5 +18,20 @@ fi
 echo "Connecting to Ray head node: ${HEAD_POD}"
 echo ""
 
-# Execute interactive bash shell
-kubectl exec -it "${HEAD_POD}" -- bash
+# Handle different invocation patterns
+if [ $# -eq 0 ]; then
+    # No arguments: interactive shell
+    kubectl exec -it "${HEAD_POD}" -- bash
+elif [ "$1" = "--" ] && [ -n "$2" ]; then
+    # Arguments after --: execute script file from local filesystem
+    SCRIPT_PATH="$2"
+    if [ ! -f "$SCRIPT_PATH" ]; then
+        echo "ERROR: Script file not found: $SCRIPT_PATH"
+        exit 1
+    fi
+    echo "Executing script: $SCRIPT_PATH"
+    kubectl exec "${HEAD_POD}" -- bash -c "$(cat "$SCRIPT_PATH")"
+else
+    # Regular arguments: execute as command string
+    kubectl exec "${HEAD_POD}" -- bash -c "$@"
+fi

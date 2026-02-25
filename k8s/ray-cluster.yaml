@@ -31,12 +31,12 @@ spec:
             # Resource requests and limits for head node
             resources:
               requests:
-                memory: "4Gi"
-                cpu: "2"
+                memory: "32Gi"
+                cpu: "15"
                 ephemeral-storage: "4Gi"
               limits:
-                memory: "8Gi"
-                ephemeral-storage: "16Gi"
+                memory: "120Gi"
+                ephemeral-storage: "190Gi"
             
             # Environment variables
             env:
@@ -111,7 +111,7 @@ spec:
                   ephemeral-storage: "4Gi"
                 limits:
                   memory: "8Gi"
-                  ephemeral-storage: "16Gi"
+                  ephemeral-storage: "8Gi"
               
               # Environment variables (same as head node)
               env:

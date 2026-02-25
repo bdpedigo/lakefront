@@ -293,11 +293,13 @@ print("Downloading table and header files...")
 temp_path = Path("/tmp/table_to_deltalake")
 temp_path.mkdir(exist_ok=True)  # ty: ignore
 
+print("Downloading with -m flag for parallel downloads...")
 
 for table in table_names:
     subprocess.run(
         [
             "gsutil",
+            "-m",
             "cp",
             str(table_cloud_paths[table]),
             str(temp_path / table_cloud_paths[table].name),  # ty: ignore
