@@ -1,0 +1,2 @@
+job: jobs.segclr.transfer_segclr.process_shard
+insertion: jobs.segclr.transfer_segclr.queue_shard

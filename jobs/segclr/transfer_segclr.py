@@ -181,7 +181,7 @@ def create_condensation_map(points, labels, root_id, shard) -> pl.DataFrame:
     return condensation_map
 
 
-@ray.remote
+@ray.remote(num_cpus=1, memory=4 * 1024**3)
 def process_shard(shard):
     zipped_n_bytes = 0
     info = {"shard": shard}
@@ -299,7 +299,8 @@ def process_shard(shard):
 
 
 def queue_shards():
-    shards = list(range(max_shards))
+    # shards = list(range(max_shards))
+    shards = list(range(4))
     info_cf = CloudFiles(str(info_out))
     finished_shards = list(info_cf)
     finished_shards = [int(Path(f).stem) for f in finished_shards]
