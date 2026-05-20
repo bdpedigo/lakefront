@@ -7,13 +7,13 @@ run config:
 
 # Shorthand test commands
 test-simple:
-    just run simple
+    just run test/simple
 
 test-setup:
-    just run setup_example
+    just run test/setup_example
 
 test-failure:
-    just run failure_test
+    just run test/failure_test
 
 # Start local kind cluster with Ray
 cluster-up-local:

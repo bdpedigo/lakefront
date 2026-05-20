@@ -49,6 +49,22 @@ SECRETS_DIR="${SECRETS_DIR:-$HOME/.cloudvolume/secrets}"
 # FUNCTIONS
 #==============================================================================
 
+# Query GCE for machine type specs and compute pod resources.
+# Reserves 1 CPU and 2GB for kubelet/system overhead.
+# Usage: read POD_CPU POD_MEMORY <<< "$(resolve_machine_resources <type> <zone>)"
+resolve_machine_resources() {
+    local machine_type="$1"
+    local zone="$2"
+    local specs
+    specs=$(gcloud compute machine-types describe "$machine_type" --zone="$zone" --format="value(guestCpus,memoryMb)")
+    local cpus=$(echo "$specs" | cut -f1)
+    local memory_mb=$(echo "$specs" | cut -f2)
+    # Reserve 1 CPU and 2GB for system/kubelet overhead
+    local pod_cpus=$((cpus - 1))
+    local pod_memory_gi=$(( (memory_mb - 2048) / 1024 ))
+    echo "${pod_cpus} ${pod_memory_gi}Gi"
+}
+
 print_header() {
     echo ""
     echo "========================================"
@@ -351,10 +367,16 @@ deploy_workload() {
         fi
     fi
     
-    # Apply deployment configuration with image substitution
+    # Apply deployment configuration with image and resource substitution
     echo "Applying deployment configuration..."
-    # Support both bdpedigo/lakefront and bdpedigo/${IMAGE_NAME} patterns
-    sed "s|image: bdpedigo/lakefront:.*|image: ${DEPLOY_IMAGE}|g; s|image: bdpedigo/${IMAGE_NAME}:.*|image: ${DEPLOY_IMAGE}|g" "${DEPLOYMENT_YAML}" | kubectl apply -f -
+    echo "  Head pod resources: ${HEAD_CPU} CPU, ${HEAD_MEMORY}"
+    echo "  Worker pod resources: ${WORKER_CPU} CPU, ${WORKER_MEMORY}"
+    sed "s|image: bdpedigo/lakefront:.*|image: ${DEPLOY_IMAGE}|g; \
+         s|image: bdpedigo/${IMAGE_NAME}:.*|image: ${DEPLOY_IMAGE}|g; \
+         s|__HEAD_CPU__|${HEAD_CPU}|g; \
+         s|__HEAD_MEMORY__|${HEAD_MEMORY}|g; \
+         s|__WORKER_CPU__|${WORKER_CPU}|g; \
+         s|__WORKER_MEMORY__|${WORKER_MEMORY}|g" "${DEPLOYMENT_YAML}" | kubectl apply -f -
     
     # Apply service if specified and exists
     if [ -n "${SERVICE_YAML}" ] && [ -f "${SERVICE_YAML}" ]; then
@@ -437,12 +459,16 @@ print_cluster_info() {
 #==============================================================================
 
 main() {
+    # Resolve pod resources from machine types
+    read HEAD_CPU HEAD_MEMORY <<< "$(resolve_machine_resources "$HEAD_MACHINE_TYPE" "$ZONE")"
+    read WORKER_CPU WORKER_MEMORY <<< "$(resolve_machine_resources "$WORKER_MACHINE_TYPE" "$ZONE")"
+
     print_header "GKE Cluster Setup for Lakefront"
     echo "Project: ${PROJECT_ID}"
     echo "Cluster: ${CLUSTER_NAME}"
     echo "Zone: ${ZONE}"
-    echo "Head pool: ${HEAD_MACHINE_TYPE} x ${HEAD_NUM_NODES} (on-demand)"
-    echo "Worker pool: ${WORKER_MACHINE_TYPE} x ${WORKER_MIN_NODES}-${WORKER_MAX_NODES} (spot)"
+    echo "Head pool: ${HEAD_MACHINE_TYPE} x ${HEAD_NUM_NODES} (on-demand) → pod: ${HEAD_CPU} CPU, ${HEAD_MEMORY}"
+    echo "Worker pool: ${WORKER_MACHINE_TYPE} x ${WORKER_MIN_NODES}-${WORKER_MAX_NODES} (spot) → pod: ${WORKER_CPU} CPU, ${WORKER_MEMORY}"
     echo "Docker Image: ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
     echo "Deployment YAML: ${DEPLOYMENT_YAML}"
     echo ""
@@ -456,7 +482,7 @@ main() {
         exit 0
     fi
     
-    build_and_push_image
+    # build_and_push_image
     create_gke_cluster
     # check if ray is in $ image name, install kuberay operator if so
     if [[ "$IMAGE_NAME" == *"ray"* ]] || grep -q "ray.io/cluster" "${DEPLOYMENT_YAML}"; then
