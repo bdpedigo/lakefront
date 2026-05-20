@@ -39,3 +39,14 @@ Job functions SHOULD declare `max_retries` and `retry_exceptions` on the `@ray.r
 #### Scenario: Worker preemption during task
 - **WHEN** a spot worker is preempted while running a task decorated with `@ray.remote(max_retries=3)`
 - **THEN** Ray reschedules the task on another available worker, up to 3 times
+
+### Requirement: Insertion functions live alongside job code
+Insertion functions SHALL be defined in a module colocated within the job folder rather than in a separate top-level `insertions/` package.
+
+#### Scenario: Insertion in job folder
+- **WHEN** a job folder `jobs/test_simple/` contains `items.py` with `def get_items()`
+- **THEN** the config SHALL reference it as `insertion: jobs.test_simple.items.get_items`
+
+#### Scenario: No separate insertions directory
+- **WHEN** all jobs have been migrated to the folder layout
+- **THEN** the top-level `insertions/` directory SHALL be removed

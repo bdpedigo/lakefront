@@ -3,17 +3,17 @@
 
 # Run a config locally (Ray auto-init)
 run config:
-    uv run python runner.py configs/{{config}}.yaml
+    uv run python runner.py jobs/{{config}}/config.yaml
 
 # Shorthand test commands
 test-simple:
-    just run test/simple
+    just run test_simple
 
 test-setup:
-    just run test/setup_example
+    just run test_setup
 
 test-failure:
-    just run test/failure_test
+    just run test_flaky
 
 # Start local kind cluster with Ray
 cluster-up-local:
@@ -23,9 +23,19 @@ cluster-up-local:
 cluster-down-local:
     scripts/cleanup_local_k8s.sh
 
+# Ensure port-forward to Ray dashboard is active
+[private]
+ensure-port-forward:
+    #!/bin/bash
+    if ! curl -s http://localhost:8265 > /dev/null 2>&1; then
+        echo "Starting port-forward to Ray dashboard..."
+        kubectl port-forward svc/lakefront-ray-cluster-head-svc 8265:8265 &
+        sleep 2
+    fi
+
 # Submit a job to the running cluster (uploads working dir automatically)
-submit config:
-    uv run ray job submit --address http://localhost:8265 --working-dir . -- uv run python runner.py configs/{{config}}.yaml
+submit config: ensure-port-forward
+    uv run ray job submit --address http://localhost:8265 --working-dir . -- uv run python runner.py jobs/{{config}}/config.yaml
 
 # Build the Docker image and push to Docker Hub
 build:
@@ -36,8 +46,7 @@ build-local:
     LOCAL_ONLY=1 scripts/build_and_push.sh
 
 # Port-forward Ray dashboard and open browser
-dashboard:
-    kubectl port-forward svc/lakefront-ray-cluster-head-svc 8265:8265 &
+dashboard: ensure-port-forward
     open http://localhost:8265
 
 # Launch remote GKE cluster (on-demand head + spot workers)

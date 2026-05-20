@@ -1,0 +1,2 @@
+job: jobs.test_flaky.job.process
+insertion: jobs.test_flaky.items.get_items

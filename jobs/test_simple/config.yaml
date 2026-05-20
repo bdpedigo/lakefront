@@ -1,0 +1,2 @@
+job: jobs.test_simple.job.process
+insertion: jobs.test_simple.items.get_items

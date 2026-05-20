@@ -1,0 +1,3 @@
+job: jobs.test_setup.job.process
+insertion: jobs.test_setup.items.get_items
+setup: jobs.test_setup.job.setup
