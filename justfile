@@ -27,13 +27,17 @@ cluster-down-local:
 submit config:
     ray job submit --address http://localhost:8265 --working-dir . -- python runner.py configs/{{config}}.yaml
 
-# Build the Docker image
+# Build the Docker image and push to Docker Hub
 build:
-    docker build -t lakefront:latest .
+    scripts/build_and_push.sh
+
+# Build the Docker image locally only (no push)
+build-local:
+    LOCAL_ONLY=1 scripts/build_and_push.sh
 
 # Port-forward Ray dashboard and open browser
 dashboard:
-    kubectl port-forward svc/raycluster-head-svc 8265:8265 &
+    kubectl port-forward svc/lakefront-ray-cluster-head-svc 8265:8265 &
     open http://localhost:8265
 
 # Launch remote GKE cluster (on-demand head + spot workers)

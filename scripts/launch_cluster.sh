@@ -59,9 +59,10 @@ resolve_machine_resources() {
     specs=$(gcloud compute machine-types describe "$machine_type" --zone="$zone" --format="value(guestCpus,memoryMb)")
     local cpus=$(echo "$specs" | cut -f1)
     local memory_mb=$(echo "$specs" | cut -f2)
-    # Reserve 1 CPU and 2GB for system/kubelet overhead
-    local pod_cpus=$((cpus - 1))
-    local pod_memory_gi=$(( (memory_mb - 2048) / 1024 ))
+    # Reserve 2 CPU and 6GB for system/kubelet/daemonset overhead
+    # (GKE reserves ~2.7GB from raw memory, plus ~1.7GB for system pods)
+    local pod_cpus=$((cpus - 2))
+    local pod_memory_gi=$(( (memory_mb - 6144) / 1024 ))
     echo "${pod_cpus} ${pod_memory_gi}Gi"
 }
 
