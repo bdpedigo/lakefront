@@ -109,6 +109,32 @@ lakefront/
 - `runner.py` is a single Python file invoked via `uv run runner.py configs/<name>.yaml`.
 - `justfile` wraps all operations: `just run segclr_all`, `just submit segclr_all`, `just cluster-up`, `just cluster-down`.
 
+## Testing Philosophy
+
+Every feature must be locally testable before moving on. The justfile is the single interface for all testing:
+
+- **Local Ray** (`just run <config>`) — runs the runner on the laptop with Ray auto-init. Zero infrastructure.
+- **Local kind cluster** (`just cluster-up-local`, `just submit <config>`) — tests the full container + KubeRay path without cloud costs.
+- **Remote GKE** (`just cluster-up`, `just submit <config>`) — production path.
+
+Each feature addition includes a corresponding test config and justfile command. The user should never need to remember a raw `uv run` or `kubectl` incantation — just the `just` commands.
+
+### Justfile Commands (complete list)
+
+| Command | Description |
+|---------|-------------|
+| `just run <config>` | Run a config locally (Ray auto-init) |
+| `just test-simple` | Shorthand: run the simple fan-out test config |
+| `just test-setup` | Shorthand: run the setup-phase test config |
+| `just test-failure` | Shorthand: run the failure-handling test config |
+| `just cluster-up-local` | Start kind cluster + deploy Ray |
+| `just cluster-down-local` | Tear down local kind cluster |
+| `just submit <config>` | Submit job to running cluster (local or remote) |
+| `just dashboard` | Port-forward Ray dashboard |
+| `just build-image` | Build Docker image |
+| `just cluster-up` | Launch remote GKE cluster |
+| `just cluster-down` | Tear down remote GKE cluster |
+
 ## Risks / Trade-offs
 
 - **Head node failure loses in-flight state** → Mitigated by idempotent writes + re-insertion. Accept the risk for now; Redis GCS HA is a future option.
