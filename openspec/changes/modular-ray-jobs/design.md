@@ -82,6 +82,17 @@ The runner and job code are identical in both modes — only the deployment mech
 
 The YAML config does not configure retries — that's the job author's responsibility on the decorator, alongside resource declarations.
 
+### 8. Pod resources auto-derived from machine type, one pod per node
+
+**Decision**: Pod CPU/memory values in `ray-cluster.yaml` are placeholder tokens (`__WORKER_CPU__`, `__WORKER_MEMORY__`, etc.) that `launch_cluster.sh` fills at deploy time by querying `gcloud compute machine-types describe`. Each pod is sized to consume the full node (minus ~1 CPU / ~2GB for kubelet overhead).
+
+**Rationale**: Per [Ray's KubeRay configuration guide](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html):
+- "It's ideal to size each Ray pod to take up the entire Kubernetes node" — fewer large pods reduce overhead from shared memory object stores, inter-pod communication, and per-pod Raylet control structures.
+- CPU: set only `requests` (no `limits`) — CPU is compressible; omitting limits allows burst without throttling. KubeRay uses the request value for Ray's scheduler when limit is absent.
+- Memory: set `requests = limits` — KubeRay ignores memory requests and reads only limits for Ray's logical capacity. Setting them equal ensures Kubernetes scheduling and Ray capacity agree.
+
+**Alternative**: Hardcoded lookup table of machine types. Rejected because `gcloud` query works for any type (including custom) with zero maintenance.
+
 ## Directory Layout
 
 ```

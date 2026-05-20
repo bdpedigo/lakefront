@@ -33,6 +33,9 @@ spec:
             
             # Resource requests and limits for head node
             # Values are templated by launch_cluster.sh from HEAD_MACHINE_TYPE
+            # CPU: requests only (no limits) — allows burst, KubeRay uses request for Ray scheduling
+            # Memory: requests = limits — KubeRay reads limits for Ray capacity
+            # Ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html
             resources:
               requests:
                 memory: "__HEAD_MEMORY__"
@@ -40,7 +43,6 @@ spec:
                 ephemeral-storage: "4Gi"
               limits:
                 memory: "__HEAD_MEMORY__"
-                ephemeral-storage: "190Gi"
             
             # Environment variables
             env:
@@ -116,6 +118,9 @@ spec:
               # Resource requests and limits for workers
               # Values are templated by launch_cluster.sh from WORKER_MACHINE_TYPE
               # Pattern: one pod per node (pod ≈ full node capacity)
+              # CPU: requests only (no limits) — allows burst, KubeRay uses request for Ray scheduling
+              # Memory: requests = limits — KubeRay reads limits for Ray capacity
+              # Ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html
               resources:
                 requests:
                   memory: "__WORKER_MEMORY__"
@@ -123,7 +128,6 @@ spec:
                   ephemeral-storage: "4Gi"
                 limits:
                   memory: "__WORKER_MEMORY__"
-                  ephemeral-storage: "8Gi"
               
               # Environment variables (same as head node)
               env:
