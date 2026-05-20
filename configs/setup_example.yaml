@@ -1,0 +1,3 @@
+job: jobs.with_setup.process
+insertion: insertions.range_items.get_items
+setup: jobs.with_setup.setup

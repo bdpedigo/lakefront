@@ -43,7 +43,10 @@ RUN ln -s /app/.venv/bin/ray /usr/local/bin/ray && \
     ln -s /app/.venv/bin/python /usr/local/bin/python3.12-venv
 
 # Copy application code
+COPY runner.py /app/runner.py
 COPY jobs/ /app/jobs/
+COPY insertions/ /app/insertions/
+COPY configs/ /app/configs/
 COPY scripts/ /app/scripts/
 COPY scratch/ /app/scratch/
 

@@ -14,9 +14,16 @@ ZONE="${GKE_ZONE:-us-west1-c}"
 REGION="${GKE_REGION:-us-west1}"
 
 # Cluster Configuration
-MACHINE_TYPE="${MACHINE_TYPE:-e2-highmem-16}"  # 4 vCPUs, 16GB RAM
-NUM_NODES="${NUM_NODES:-1}"
 CLUSTER_NAME="${CLUSTER_NAME:-lakefront-ray-cluster}"
+
+# Head node pool (on-demand, small)
+HEAD_MACHINE_TYPE="${HEAD_MACHINE_TYPE:-e2-standard-4}"
+HEAD_NUM_NODES="${HEAD_NUM_NODES:-1}"
+
+# Worker node pool (spot, autoscaling)
+WORKER_MACHINE_TYPE="${WORKER_MACHINE_TYPE:-e2-highmem-16}"
+WORKER_MIN_NODES="${WORKER_MIN_NODES:-0}"
+WORKER_MAX_NODES="${WORKER_MAX_NODES:-10}"
 
 # Disk Configuration
 DISK_SIZE="${DISK_SIZE:-200}"  # GB
@@ -163,25 +170,23 @@ create_gke_cluster() {
         NETWORK_FLAGS="--network ${NETWORK} --subnetwork ${SUBNETWORK}"
     fi
     
-    # Create cluster
+    # Create cluster with on-demand default pool (for head node)
     echo "Creating cluster with:"
-    echo "  Machine type: ${MACHINE_TYPE}"
-    echo "  Nodes: ${NUM_NODES}"
-    echo "  Disk: ${DISK_SIZE}GB ${DISK_TYPE}"
+    echo "  Head pool: ${HEAD_MACHINE_TYPE} x ${HEAD_NUM_NODES} (on-demand)"
+    echo "  Worker pool: ${WORKER_MACHINE_TYPE} x ${WORKER_MIN_NODES}-${WORKER_MAX_NODES} (spot)"
     echo ""
     
     gcloud container clusters create "${CLUSTER_NAME}" \
         --zone="${ZONE}" \
         --no-enable-basic-auth \
         --release-channel="stable" \
-        --machine-type="${MACHINE_TYPE}" \
+        --machine-type="${HEAD_MACHINE_TYPE}" \
         --image-type="COS_CONTAINERD" \
         --disk-type="${DISK_TYPE}" \
         --disk-size="${DISK_SIZE}" \
         --metadata disable-legacy-endpoints=true \
         --scopes="https://www.googleapis.com/auth/devstorage.read_only","https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring","https://www.googleapis.com/auth/servicecontrol","https://www.googleapis.com/auth/service.management.readonly","https://www.googleapis.com/auth/trace.append" \
-        --spot \
-        --num-nodes="${NUM_NODES}" \
+        --num-nodes="${HEAD_NUM_NODES}" \
         --logging=SYSTEM,WORKLOAD \
         --monitoring=SYSTEM \
         --enable-ip-alias \
@@ -195,6 +200,26 @@ create_gke_cluster() {
         --max-pods-per-node="110" \
         --node-locations="${ZONE}" \
         --enable-shielded-nodes \
+        --shielded-secure-boot \
+        --shielded-integrity-monitoring
+    
+    # Add spot worker node pool with autoscaling
+    echo ""
+    echo "Adding spot worker node pool..."
+    gcloud container node-pools create "spot-workers" \
+        --cluster="${CLUSTER_NAME}" \
+        --zone="${ZONE}" \
+        --machine-type="${WORKER_MACHINE_TYPE}" \
+        --spot \
+        --enable-autoscaling \
+        --min-nodes="${WORKER_MIN_NODES}" \
+        --max-nodes="${WORKER_MAX_NODES}" \
+        --disk-type="${DISK_TYPE}" \
+        --disk-size="${DISK_SIZE}" \
+        --scopes="https://www.googleapis.com/auth/devstorage.read_only","https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring" \
+        --node-taints="cloud.google.com/gke-spot=true:NoSchedule" \
+        --enable-autoupgrade \
+        --enable-autorepair \
         --shielded-secure-boot \
         --shielded-integrity-monitoring
     
@@ -416,8 +441,8 @@ main() {
     echo "Project: ${PROJECT_ID}"
     echo "Cluster: ${CLUSTER_NAME}"
     echo "Zone: ${ZONE}"
-    echo "Machine Type: ${MACHINE_TYPE}"
-    echo "Nodes: ${NUM_NODES}"
+    echo "Head pool: ${HEAD_MACHINE_TYPE} x ${HEAD_NUM_NODES} (on-demand)"
+    echo "Worker pool: ${WORKER_MACHINE_TYPE} x ${WORKER_MIN_NODES}-${WORKER_MAX_NODES} (spot)"
     echo "Docker Image: ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
     echo "Deployment YAML: ${DEPLOYMENT_YAML}"
     echo ""
@@ -431,7 +456,7 @@ main() {
         exit 0
     fi
     
-    # build_and_push_image
+    build_and_push_image
     create_gke_cluster
     # check if ray is in $ image name, install kuberay operator if so
     if [[ "$IMAGE_NAME" == *"ray"* ]] || grep -q "ray.io/cluster" "${DEPLOYMENT_YAML}"; then

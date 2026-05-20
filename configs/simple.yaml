@@ -1,0 +1,2 @@
+job: jobs.square.process
+insertion: insertions.range_items.get_items

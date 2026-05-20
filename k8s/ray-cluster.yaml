@@ -7,8 +7,8 @@ spec:
   # Ray version - should match the version in pyproject.toml
   rayVersion: "2.54.0"
   
-  # Enable in-tree autoscaling (optional, can be disabled for fixed size clusters)
-  enableInTreeAutoscaling: false
+  # Enable in-tree autoscaling for worker pool
+  enableInTreeAutoscaling: true
   
   # Head node configuration
   headGroupSpec:
@@ -21,6 +21,9 @@ spec:
     # Pod template for the head node
     template:
       spec:
+        # Pin head to on-demand (non-preemptible) nodes
+        nodeSelector:
+          cloud.google.com/gke-provisioning: standard
         containers:
           - name: ray-head
             # Use the Docker image we just built
@@ -95,6 +98,14 @@ spec:
       # Pod template for worker nodes
       template:
         spec:
+          # Pin workers to spot/preemptible nodes
+          nodeSelector:
+            cloud.google.com/gke-provisioning: spot
+          tolerations:
+            - key: cloud.google.com/gke-spot
+              operator: Equal
+              value: "true"
+              effect: NoSchedule
           containers:
             - name: ray-worker
               # Same image as head node (update to match head node image)
