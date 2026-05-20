@@ -25,7 +25,7 @@ cluster-down-local:
 
 # Submit a job to the running cluster (uploads working dir automatically)
 submit config:
-    ray job submit --address http://localhost:8265 --working-dir . -- python runner.py configs/{{config}}.yaml
+    uv run ray job submit --address http://localhost:8265 --working-dir . -- uv run python runner.py configs/{{config}}.yaml
 
 # Build the Docker image and push to Docker Hub
 build:

@@ -37,10 +37,8 @@ COPY uv.lock /app/uv.lock
 # Install dependencies
 RUN uv sync --frozen
 
-# Create symlinks for ray and python to make them accessible system-wide
-# This ensures KubeRay operator can find them
-RUN ln -s /app/.venv/bin/ray /usr/local/bin/ray && \
-    ln -s /app/.venv/bin/python /usr/local/bin/python3.12-venv
+# Create symlink for ray so KubeRay operator can find it
+RUN ln -s /app/.venv/bin/ray /usr/local/bin/ray
 
 # Copy application code
 COPY runner.py /app/runner.py
@@ -52,6 +50,8 @@ COPY scratch/ /app/scratch/
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
+# Tell uv to always use the pre-built venv regardless of CWD
+ENV UV_PROJECT_ENVIRONMENT="/app/.venv"
 
 # Set Ray-specific environment variables
 ENV RAY_DEDUP_LOGS="0"
