@@ -40,13 +40,8 @@ RUN uv sync --frozen
 # Create symlink for ray so KubeRay operator can find it
 RUN ln -s /app/.venv/bin/ray /usr/local/bin/ray
 
-# Copy application code
-COPY runner.py /app/runner.py
-COPY jobs/ /app/jobs/
-COPY insertions/ /app/insertions/
-COPY configs/ /app/configs/
-COPY scripts/ /app/scripts/
-COPY scratch/ /app/scratch/
+# No application code copied — Ray's --working-dir uploads it at job submission time.
+# This image is a pure environment: rebuild only when dependencies change.
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
