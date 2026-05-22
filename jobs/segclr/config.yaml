@@ -1,5 +1,5 @@
 job: jobs.segclr.transfer_segclr_batched.process_and_write_batch
-insertion: jobs.segclr.transfer_segclr_batched.queue_shard_batches_test
+insertion: jobs.segclr.transfer_segclr_batched.queue_shard_batches
 cluster:
   head_machine_type: e2-standard-2
   worker_machine_type: e2-highmem-16

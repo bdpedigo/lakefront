@@ -264,7 +264,7 @@ def batch_key(input_shards: list[int]) -> str:
     return f"{(h1 ^ h2):016x}"
 
 
-@ray.remote(num_cpus=1, memory=8 * 1024**3)
+@ray.remote(num_cpus=1, memory=32 * 1024**3)
 def process_and_write_batch(input_shards: list[int]) -> int:
     import logging
 
@@ -364,8 +364,4 @@ def queue_shard_batches() -> list[list[int]]:
 
 
 def queue_shard_batches_test() -> list[list[int]]:
-    shards_to_process = get_shards_to_process(INPUT_N_SHARDS)
-    return [
-        shards_to_process[i : i + BATCH_SIZE]
-        for i in range(0, len(shards_to_process), BATCH_SIZE)
-    ][0:1]
+    return queue_shard_batches()[:2]
