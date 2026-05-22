@@ -3,7 +3,6 @@ import time
 
 import ray
 
-
 DURATION_SECONDS = 60
 
 
