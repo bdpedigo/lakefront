@@ -75,7 +75,7 @@ cluster-up job="":
             echo "ERROR: Config not found: $config"
             exit 1
         fi
-        eval "$(uv run python -c 'import yaml,sys;c=yaml.safe_load(open(sys.argv[1])).get("cluster",{});h=c.get("head_machine_type");w=c.get("worker_machine_type");print(f"export HEAD_MACHINE_TYPE={h}" if h else "",end="");print(f"\nexport WORKER_MACHINE_TYPE={w}" if w else "",end="")' "$config")"
+        eval "$(uv run python -c 'import yaml,sys;c=yaml.safe_load(open(sys.argv[1])).get("cluster",{});h=c.get("head_machine_type");w=c.get("worker_machine_type");m=c.get("max_workers");print(f"export HEAD_MACHINE_TYPE={h}" if h else "",end="");print(f"\nexport WORKER_MACHINE_TYPE={w}" if w else "",end="");print(f"\nexport WORKER_MAX_NODES={m}" if m else "",end="")' "$config")"
     fi
     scripts/launch_cluster.sh
 

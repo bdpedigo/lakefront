@@ -56,9 +56,16 @@ resolve_machine_resources() {
     local machine_type="$1"
     local zone="$2"
     local specs
-    specs=$(gcloud compute machine-types describe "$machine_type" --zone="$zone" --format="value(guestCpus,memoryMb)")
+    if ! specs=$(gcloud compute machine-types describe "$machine_type" --zone="$zone" --format="value(guestCpus,memoryMb)" 2>/dev/null); then
+        echo "ERROR: Machine type '$machine_type' not found in zone '$zone'" >&2
+        exit 1
+    fi
     local cpus=$(echo "$specs" | cut -f1)
     local memory_mb=$(echo "$specs" | cut -f2)
+    if [ -z "$cpus" ] || [ -z "$memory_mb" ]; then
+        echo "ERROR: Could not resolve specs for machine type '$machine_type'" >&2
+        exit 1
+    fi
     # Reserve 2 CPU and 6GB for system/kubelet/daemonset overhead
     # (GKE reserves ~2.7GB from raw memory, plus ~1.7GB for system pods)
     local pod_cpus=$((cpus - 2))
@@ -377,7 +384,8 @@ deploy_workload() {
          s|__HEAD_CPU__|${HEAD_CPU}|g; \
          s|__HEAD_MEMORY__|${HEAD_MEMORY}|g; \
          s|__WORKER_CPU__|${WORKER_CPU}|g; \
-         s|__WORKER_MEMORY__|${WORKER_MEMORY}|g" "${DEPLOYMENT_YAML}" | kubectl apply -f -
+         s|__WORKER_MEMORY__|${WORKER_MEMORY}|g; \
+         s|__MAX_REPLICAS__|${WORKER_MAX_NODES}|g" "${DEPLOYMENT_YAML}" | kubectl apply -f -
     
     # Apply service if specified and exists
     if [ -n "${SERVICE_YAML}" ] && [ -f "${SERVICE_YAML}" ]; then
