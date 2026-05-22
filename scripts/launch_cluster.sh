@@ -10,8 +10,8 @@ set -e  # Exit on error
 
 # GCP Project Configuration
 PROJECT_ID="${GCP_PROJECT_ID:-exalted-beanbag-334502}"
-ZONE="${GKE_ZONE:-us-west1-c}"
-REGION="${GKE_REGION:-us-west1}"
+ZONE="${GKE_ZONE:-us-east1-c}"
+REGION="${GKE_REGION:-us-east1}"
 
 # Cluster Configuration
 CLUSTER_NAME="${CLUSTER_NAME:-lakefront-ray-cluster}"
