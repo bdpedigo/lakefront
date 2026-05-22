@@ -123,6 +123,22 @@ check_prerequisites() {
     echo "✓ All prerequisites met"
 }
 
+verify_remote_image_exists() {
+    local deploy_image="${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+    print_header "Verifying Remote Docker Image"
+    echo "Checking remote image tag: ${deploy_image}"
+
+    if ! docker manifest inspect "${deploy_image}" > /dev/null 2>&1; then
+        echo "ERROR: Remote image tag not found: ${deploy_image}"
+        echo "Push the image first or set IMAGE_TAG to a tag that already exists online."
+        echo "Example: DOCKER_USERNAME=${DOCKER_USERNAME} IMAGE_TAG=${IMAGE_TAG} ./scripts/build_and_push.sh"
+        exit 1
+    fi
+
+    echo "✓ Remote image tag exists"
+}
+
 build_and_push_image() {
     if [ -z "$DOCKER_USERNAME" ]; then
         print_header "Skipping Docker Image Push (DOCKER_USERNAME not set)"
@@ -490,6 +506,8 @@ main() {
         echo "Aborted"
         exit 0
     fi
+
+    verify_remote_image_exists
     
     # build_and_push_image
     create_gke_cluster

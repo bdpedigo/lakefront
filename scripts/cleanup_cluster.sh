@@ -8,7 +8,7 @@ set -e
 #==============================================================================
 
 PROJECT_ID="${GCP_PROJECT_ID:-exalted-beanbag-334502}"
-ZONE="${GKE_ZONE:-us-west1-c}"
+ZONE="${GKE_ZONE:-us-east1-c}"
 CLUSTER_NAME="${CLUSTER_NAME:-lakefront-ray-cluster}"
 
 #==============================================================================
