@@ -1,16 +1,18 @@
 # %%
 import io
-import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import StringIO
 
 import mmh3
 import numpy as np
 import pandas as pd
 import polars as pl
+import pyarrow as pa
+import pyarrow.parquet as pq
+import ray
 from cloudfiles import CloudFiles
 from cloudpathlib import AnyPath as Path
-from deltalake import WriterProperties
 from scipy.sparse import csr_array
 from scipy.sparse.csgraph import connected_components
 from sklearn.cluster import AgglomerativeClustering
@@ -20,14 +22,8 @@ from tqdm.auto import tqdm
 INPUT_PATH = "gs://iarpa_microns/minnie/minnie65/embeddings_m943/segclr_nm_coord_public_offset_csvzips"
 
 
-max_shards = 50_000
+INPUT_N_SHARDS = 50_000
 
-# TODO
-base_out_path = Path("gs://bdp-ssa/segclr")
-raw_delta_out_path = base_out_path / "raw_segclr_deltalake"
-lance_out_path = base_out_path / "segclr_lance"
-delta_out_path = base_out_path / "condensed_segclr_deltalake"
-info_out = base_out_path / "info"
 
 truncate_embeddings = True
 ORIGINAL_N_DIMENSIONS = 128
@@ -40,6 +36,7 @@ embedding_dtype = "float32"
 pl_embedding_dtype = pl.Float32
 point_dtype = "float32"
 
+
 column_names = ["node_id", "x", "y", "z"] + [
     f"{i}" for i in range(ORIGINAL_N_DIMENSIONS)
 ]
@@ -51,9 +48,6 @@ dtypes = {
 }
 dtypes.update({f"{i}": embedding_dtype for i in range(ORIGINAL_N_DIMENSIONS)})
 
-
-writer_properties = WriterProperties(compression="SNAPPY")
-
 FEATURE_COLS = [f"{i}" for i in range(N_DIMENSIONS)]
 
 # These are the main hyperparams to tune in terms of how much compression
@@ -61,14 +55,10 @@ FEATURE_COLS = [f"{i}" for i in range(N_DIMENSIONS)]
 # linkage is the clustering func - ward tries to minimize variance within clusters,
 # complete minimizes the maximum difference between points in a cluster which sounded
 # appealing but wasn't as visually compelling as I had hoped. both worth playing with
-
-
 distance_threshold = 50
 linkage = "ward"
 
-
-bytewidth = 8
-n_shards = 4096
+BASE_OUT_PATH = Path("gs://bdp-ssa/segclr")
 
 
 def mmh3_shard(
@@ -78,13 +68,6 @@ def mmh3_shard(
     h1, h2 = mmh3.hash64(segment_id_bytes, signed=False)  # two 64-bit halves
     hash_value = h1 ^ h2  # XOR fold into single 64-bit value
     return hash_value % n_shards
-
-
-def sharder(segment_ids: list[int]) -> list[int]:
-    return [
-        mmh3_shard(segment_id, n_shards=n_shards, bytewidth=bytewidth)
-        for segment_id in segment_ids
-    ]
 
 
 def parse_csv_data(data) -> pd.DataFrame:
@@ -258,108 +241,131 @@ def process_embeddings(
 
 # %%
 
-# all_raw_embeddings = pd.concat(raw_embeddings_by_root.values(), ignore_index=True)
-# all_raw_embeddings = pl.from_pandas(all_raw_embeddings)
-# all_raw_embeddings = all_raw_embeddings.with_columns(
-#     pl.struct(FEATURE_COLS).alias("embedding")
-# ).drop(FEATURE_COLS)
 
-# write_deltalake(
-#     str(raw_delta_out_path / "all_raw_embeddings"),
-#     all_raw_embeddings,
-#     partition_by=["shard"],
-#     mode="append",
-#     writer_properties=writer_properties,
-# )
+# --- Pipeline config ---
+BATCH_SIZE = 8  # input shards per worker task
+N_OUTPUT_SHARDS = 32  # coarse output bucketing for parquet writes
+EMBEDDINGS_OUT = str(BASE_OUT_PATH / "temp_condensed_embeddings")
+MAPS_OUT = str(BASE_OUT_PATH / "temp_condensation_maps")
+CHECKPOINT_PATH = str(BASE_OUT_PATH / "temp_checkpoints")
 
 
-# %%
+def compute_output_shard(table: pa.Table, n_output_shards: int) -> pa.Array:
+    """Hash root_id to assign each row to an output shard."""
+    root_ids = table.column("root_id").to_pylist()
+    shards = [mmh3_shard(rid, n_shards=n_output_shards) for rid in root_ids]
+    return pa.array(shards, type=pa.int32())
 
-import pyarrow as pa
-import ray
+
+def batch_key(input_shards: list[int]) -> str:
+    """Deterministic short hash of the input shard set."""
+    payload = ",".join(str(s) for s in sorted(input_shards))
+    h1, h2 = mmh3.hash64(payload.encode(), signed=False)
+    return f"{(h1 ^ h2):016x}"
 
 
-@ray.remote(num_cpus=1, memory=4 * 1024**3)
-def process_shard(shard: int) -> tuple[pa.Table, pa.Table]:
-    all_condensed_embeddings = []
-    all_condensation_maps = []
+@ray.remote(num_cpus=1, memory=8 * 1024**3)
+def process_and_write_batch(input_shards: list[int]) -> int:
+    import logging
 
-    raw_embeddings_by_root = get_embeddings(shard)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    logger = logging.getLogger(__name__)
 
-    all_condensed_embeddings, all_condensation_maps = process_embeddings(
-        raw_embeddings_by_root
+    bkey = batch_key(input_shards)
+    n_shards = len(input_shards)
+    logger.info(f"[{bkey}] Starting batch: shards={input_shards}")
+
+    # Fan out GCS downloads with threads (I/O-bound)
+    with ThreadPoolExecutor(max_workers=len(input_shards)) as pool:
+        futures = {pool.submit(get_embeddings, s): s for s in input_shards}
+        raw_data = {}
+        for i, f in enumerate(as_completed(futures), 1):
+            shard = futures[f]
+            raw_data[shard] = f.result()
+            logger.info(f"[{bkey}] Downloaded shard {shard} ({i}/{n_shards})")
+
+    # Process each shard's embeddings (CPU-bound, sequential)
+    all_embeddings = []
+    all_maps = []
+    for i, (shard, embeddings_by_root) in enumerate(raw_data.items(), 1):
+        emb, maps = process_embeddings(embeddings_by_root)
+        all_embeddings.append(emb.to_arrow())
+        all_maps.append(maps.to_arrow())
+        logger.info(f"[{bkey}] Processed shard {shard} ({i}/{n_shards})")
+
+    all_embeddings = pa.concat_tables(all_embeddings)
+    all_maps = pa.concat_tables(all_maps)
+
+    # Compute output shard assignments once
+    emb_output_shards = compute_output_shard(all_embeddings, N_OUTPUT_SHARDS)
+    map_output_shards = compute_output_shard(all_maps, N_OUTPUT_SHARDS)
+
+    # Partition by output shard and write to GCS
+    out_cf_emb = CloudFiles(EMBEDDINGS_OUT)
+    out_cf_maps = CloudFiles(MAPS_OUT)
+
+    n_files_written = 0
+    for output_shard in range(N_OUTPUT_SHARDS):
+        mask = pa.compute.equal(emb_output_shards, output_shard)
+        emb_partition = all_embeddings.filter(mask)
+        if emb_partition.num_rows > 0:
+            buf = pa.BufferOutputStream()
+            pq.write_table(emb_partition, buf)
+            out_cf_emb.put(
+                f"output_shard={output_shard}/batch_{bkey}.parquet",
+                buf.getvalue().to_pybytes(),
+            )
+            n_files_written += 1
+
+        map_mask = pa.compute.equal(map_output_shards, output_shard)
+        map_partition = all_maps.filter(map_mask)
+        if map_partition.num_rows > 0:
+            buf = pa.BufferOutputStream()
+            pq.write_table(map_partition, buf)
+            out_cf_maps.put(
+                f"output_shard={output_shard}/batch_{bkey}.parquet",
+                buf.getvalue().to_pybytes(),
+            )
+            n_files_written += 1
+
+    logger.info(
+        f"[{bkey}] Wrote {n_files_written} parquet files across {N_OUTPUT_SHARDS} output shards"
     )
 
-    return all_condensed_embeddings.to_arrow(), all_condensation_maps.to_arrow()
+    # Checkpoint: mark input shards as complete
+    cf = CloudFiles(CHECKPOINT_PATH)
+    for s in input_shards:
+        cf.put_json(f"{s}.json", {"input_shard": s, "batch_key": bkey})
+
+    logger.info(f"[{bkey}] Done. Checkpointed {n_shards} shards.")
+    return len(input_shards)
 
 
-def run_shard_pre_write(shard: int):
-    timer = time.time()
-
-    all_condensed_embeddings, all_condensation_maps = process_shard(shard)
-
-    elapsed = time.time() - timer
-    info = {
-        "input_shard": shard,
-        "n_input_rows": sum(len(df) for df in raw_embeddings_by_root.values()),
-        "n_condensed_rows": len(all_condensed_embeddings),
-        "elapsed_seconds": elapsed,
-    }
+# --- Driver: orchestration only, no data ---
 
 
-# # write info out
-# CloudFile(str(info_out / f"{shard}.json")).put_json(info)
-
-
-# write_deltalake(
-#     str(delta_out_path / "condensed_embeddings"),
-#     all_condensed_embeddings,
-#     partition_by=["root_id_partition"],
-#     mode="append",
-#     writer_properties=writer_properties,
-# )
-# write_deltalake(
-#     str(delta_out_path / "condensation_maps"),
-#     all_condensation_maps,
-#     partition_by=["root_id_partition"],
-#     mode="append",
-#     writer_properties=writer_properties,
-# )
-
-# lance.write_dataset(
-#     all_condensed_embeddings.to_arrow(),
-#     str(lance_out_path),
-#     mode="append",
-# )
-
-
-# back = process_shard(0)
-
-
-# %%
-
-
-def queue_shards_test():
-    # shards = list(range(max_shards))
-    shards = list(range(4))
-    info_cf = CloudFiles(str(info_out))
-    finished_shards = list(info_cf)
-    finished_shards = [int(Path(f).stem) for f in finished_shards]
-    shards_to_process = set(shards) - set(finished_shards)
+def get_shards_to_process(total_shards: int) -> list[int]:
+    all_shards = list(range(total_shards))
+    cf = CloudFiles(CHECKPOINT_PATH)
+    finished = [int(Path(f).stem) for f in cf.list()]
+    remaining = sorted(set(all_shards) - set(finished))
     print(
-        f"Total shards: {len(shards)}, Finished: {len(finished_shards)}, To process: {len(shards_to_process)}"
+        f"Total: {len(all_shards)}, Finished: {len(finished)}, Remaining: {len(remaining)}"
     )
-    return list(shards_to_process)
+    return remaining
 
 
-# print(max(queue_shards_test()))
+def queue_shard_batches() -> list[list[int]]:
+    shards_to_process = get_shards_to_process(INPUT_N_SHARDS)
+    return [
+        shards_to_process[i : i + BATCH_SIZE]
+        for i in range(0, len(shards_to_process), BATCH_SIZE)
+    ]
 
 
-refs = [process_shard.remote(shard) for shard in range(4)]
-
-# put refs into ray data
-ds = ray.data.from_refs(refs)
-
-ds = ds.materialize()
-
-print(ds.count())
+def queue_shard_batches_test() -> list[list[int]]:
+    shards_to_process = get_shards_to_process(INPUT_N_SHARDS)
+    return [
+        shards_to_process[i : i + BATCH_SIZE]
+        for i in range(0, len(shards_to_process), BATCH_SIZE)
+    ][0:1]

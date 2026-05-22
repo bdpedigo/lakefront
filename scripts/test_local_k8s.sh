@@ -179,6 +179,10 @@ spec:
           - name: ray-head
             image: lakefront-ray:latest
             imagePullPolicy: IfNotPresent
+            securityContext:
+              capabilities:
+                add:
+                  - SYS_PTRACE
             
             # Reduced resources for local testing
             resources:
@@ -217,6 +221,10 @@ spec:
             - name: ray-worker
               image: lakefront-ray:latest
               imagePullPolicy: IfNotPresent
+              securityContext:
+                capabilities:
+                  add:
+                    - SYS_PTRACE
               
               # Reduced resources for local testing
               resources:

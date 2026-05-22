@@ -30,6 +30,10 @@ spec:
             # TODO: Update this to your Docker Hub username (e.g., YOUR-USERNAME/lakefront-ray:latest)
             image: bdpedigo/lakefront-ray:v1
             imagePullPolicy: Always
+            securityContext:
+              capabilities:
+                add:
+                  - SYS_PTRACE
             
             # Resource requests and limits for head node
             # Values are templated by launch_cluster.sh from HEAD_MACHINE_TYPE
@@ -114,6 +118,10 @@ spec:
               # Same image as head node (update to match head node image)
               image: bdpedigo/lakefront-ray:v1
               imagePullPolicy: Always
+              securityContext:
+                capabilities:
+                  add:
+                    - SYS_PTRACE
               
               # Resource requests and limits for workers
               # Values are templated by launch_cluster.sh from WORKER_MACHINE_TYPE

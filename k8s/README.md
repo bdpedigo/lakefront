@@ -99,3 +99,25 @@ Once deployed, you can:
 2. **Submit jobs**: `ray job submit --address http://<EXTERNAL-IP>:8265 -- python jobs/simple_job.py`
 3. **SSH into head node**: `kubectl exec -it <head-pod-name> -- bash`
 4. **View logs**: `kubectl logs <pod-name>`
+
+## py-spy Profiling
+
+The active Ray Kubernetes workflows now add the `SYS_PTRACE` capability to both
+head and worker Pods so Ray Dashboard stack traces and CPU flame graphs can use
+`py-spy`.
+
+- Remote clusters launched through `just cluster-up` pick this up from `k8s/ray-cluster.yaml`.
+- Local Kubernetes clusters launched through `just cluster-up-local` get the same capability from the generated manifest in `scripts/test_local_k8s.sh`.
+- Direct local runs through `just run <config>` do not use Kubernetes; host-side `py-spy` permissions on your laptop are a separate concern.
+
+To use the Ray Dashboard profiler:
+
+1. Launch a cluster with `just cluster-up` or `just cluster-up-local`.
+2. Open the dashboard with `just dashboard`.
+3. Submit or run a job with an actively busy task.
+4. In the Ray Dashboard, inspect the task's Stack Trace or CPU Flame Graph.
+
+Notes:
+
+- CPU flame graphs need non-idle work. If the task is mostly sleeping or blocked, `py-spy` may report no stack counts.
+- Kubernetes clusters enforcing `baseline` or `restricted` Pod Security policies may reject `SYS_PTRACE`.
